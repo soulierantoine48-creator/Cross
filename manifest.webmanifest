@@ -1,0 +1,9 @@
+{
+  "name": "Cross Collège",
+  "short_name": "Cross",
+  "description": "Gestion, chronométrage et classements du cross du collège",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#eef2f7",
+  "theme_color": "#0f172a"
+}
