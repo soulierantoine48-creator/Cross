@@ -244,8 +244,9 @@
 
   function pdfTable(doc,title,head,body,first){ if(!first) doc.addPage(); doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.text(title,14,18); doc.autoTable({head:[head],body,startY:24,styles:{fontSize:8},headStyles:{fillColor:[15,23,42]}}); }
   function exportResultsPdf() {
-    const g=rankings(); if(!window.jspdf?.jsPDF || !window.jspdf?.jsPDF.prototype.autoTable) return notify('Module PDF indisponible');
+    const g=rankings(); if(!window.jspdf?.jsPDF) return notify('Module PDF indisponible');
     const {jsPDF}=window.jspdf, doc=new jsPDF({unit:'mm',format:'a4'});
+    if(typeof doc.autoTable !== 'function') return notify('Module tableau PDF indisponible');
     pdfTable(doc,'Classement par niveau et sexe',['Niveau','Sexe','Rang','Dossard','Élève','Classe','Temps'],g.individual.map(r=>[r.level,r.sex,r.rank,r.bib,r.name,r.className,r.time]),true);
     pdfTable(doc,'Classement par classe',['Classe','Rang','Dossard','Élève','Sexe','Temps'],g.byClass.map(r=>[r.className,r.rank,r.bib,r.name,r.sex,r.time]),false);
     pdfTable(doc,'Classement des classes par niveau',['Niveau','Rang','Classe','Présents','Temps moyen'],g.classAverages.map(r=>[r.level,r.rank,r.className,r.count,r.average]),false);
