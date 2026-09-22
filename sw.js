@@ -1,4 +1,4 @@
-const CACHE = 'cross-college-v3';
+const CACHE = 'cross-college-v4';
 const LOCAL = ['./','./index.html','./styles.css','./app.js','./manifest.webmanifest'];
 const EXTERNAL = [
   'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js',
@@ -22,11 +22,21 @@ self.addEventListener('activate', e => e.waitUntil((async () => {
   await Promise.all(names.filter(n => n !== CACHE).map(n => caches.delete(n)));
   await self.clients.claim();
 })()));
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-    const copy = res.clone();
-    caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
-    return res;
-  })));
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    try {
+      const response = await fetch(event.request);
+      if (response.ok || response.type === 'opaque') {
+        await cache.put(event.request, response.clone());
+      }
+      return response;
+    } catch (_) {
+      const cached = await cache.match(event.request);
+      if (cached) return cached;
+      if (event.request.mode === 'navigate') return cache.match('./index.html');
+      return new Response('Hors connexion', { status: 503, statusText: 'Offline' });
+    }
+  })());
 });
