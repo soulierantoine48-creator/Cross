@@ -142,9 +142,9 @@
         }).join('') : '<p class="empty">Aucune course terminée pour le moment.</p>'}</div>
       </div>
 
-      <div class="card results-main table-card">
+      <div class="card results-main table-card" id="race-results-panel" tabindex="-1">
         ${selectedRace ? `<div class="card-head"><div><h3>${esc(selectedRace.name)}</h3><p>${runners.filter(s=>s.elapsedMs!=null).length} classés · ${runners.filter(s=>s.elapsedMs==null).length} absents/non classés · ${state.crossDistanceM ? state.crossDistanceM+' m' : 'distance non renseignée'}</p></div></div>
-        <table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th><th>Vitesse moy.</th></tr></thead><tbody>${raceRows.map(r=>`<tr><td>${r.rank}</td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td>${r.time}</td><td>${r.speed}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">Sélectionne une course terminée pour afficher son classement.</p>'}
+        ${raceRows.length ? `<table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th><th>Vitesse moy.</th></tr></thead><tbody>${raceRows.map(r=>`<tr><td>${r.rank}</td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td>${r.time}</td><td>${r.speed}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">Aucune arrivée enregistrée pour cette course.</p>'}` : '<p class="empty">Sélectionne une course terminée pour afficher son classement.</p>'}
       </div>
 
       <div class="card table-card"><h3>Meilleure classe par niveau</h3><table><thead><tr><th>Niveau</th><th>Rang</th><th>Classe</th><th>Classés</th><th>Inscrits</th><th>Temps moyen</th></tr></thead><tbody>${g.classAverages.map(r => `<tr><td>${esc(r.level)}</td><td>${r.rank}</td><td>${esc(r.className)}</td><td>${r.count}</td><td>${r.enrolled}</td><td>${r.average}</td></tr>`).join('')}</tbody></table></div>
@@ -181,7 +181,16 @@
     $('#undo')?.addEventListener('click', undoLast);
     $('#test-scan')?.addEventListener('click', () => notify('Mode test : scanne un dossard. Le code doit apparaître ici.'));
     $('#export-all-results')?.addEventListener('click', exportResultsPdf);
-    document.querySelectorAll('[data-view-race]').forEach(b => b.onclick = () => { state.resultRaceId=b.dataset.viewRace; save(); render(); });
+    document.querySelectorAll('[data-view-race]').forEach(b => b.onclick = () => {
+      state.resultRaceId=b.dataset.viewRace;
+      save();
+      render();
+      setTimeout(() => {
+        const panel=document.getElementById('race-results-panel');
+        panel?.scrollIntoView({behavior:'smooth',block:'start',inline:'nearest'});
+        try { panel?.focus({preventScroll:true}); } catch {}
+      },40);
+    });
     document.querySelectorAll('[data-export-race]').forEach(b => b.onclick = () => exportRacePdf(b.dataset.exportRace));
     $('#save-settings')?.addEventListener('click', saveSettings);
   }
@@ -395,13 +404,13 @@
       JsBarcode(barCanvas,String(s.bib),{
         format:'CODE128',
         displayValue:false,
-        height:96,
-        margin:14,
-        width:2.5,
+        height:320,
+        margin:42,
+        width:8,
         background:'#ffffff',
         lineColor:'#000000'
       });
-      doc.addImage(barCanvas.toDataURL('image/png'),'PNG',98,58,101,17);
+      doc.addImage(barCanvas.toDataURL('image/png'),'PNG',98,58,101,17,undefined,'NONE');
 
       // Numéro : beaucoup plus dominant, avec adaptation automatique si 4 chiffres ou plus.
       const bib=String(s.bib);
@@ -424,13 +433,13 @@
       const holder=document.createElement('div');
       new QRCode(holder,{
         text:String(s.bib),
-        width:256,
-        height:256,
+        width:1024,
+        height:1024,
         correctLevel:QRCode.CorrectLevel.H
       });
       const qrCanvas=holder.querySelector('canvas'), qrImg=holder.querySelector('img');
       const qrData=qrCanvas ? qrCanvas.toDataURL('image/png') : qrImg?.src;
-      if(qrData) doc.addImage(qrData,'PNG',130,164,37,37);
+      if(qrData) doc.addImage(qrData,'PNG',130,164,37,37,undefined,'NONE');
     });
 
     doc.save('dossards-cross-ada-lovelace-2026.pdf');
