@@ -133,7 +133,7 @@
 
   function manualModal() {
     const q = manualQuery.trim().toLowerCase();
-    const candidates = state.students.filter(s => s.elapsedMs == null && s.raceId && raceOf(s.raceId)?.startedAt && (!q || String(s.bib).includes(q) || nameOf(s).toLowerCase().includes(q) || String(s.className).toLowerCase().includes(q))).slice(0,30);
+    const candidates = state.students.filter(s => s.elapsedMs == null && s.raceId && raceOf(s.raceId)?.startedAt && !raceOf(s.raceId)?.endedAt && (!q || String(s.bib).includes(q) || nameOf(s).toLowerCase().includes(q) || String(s.className).toLowerCase().includes(q))).slice(0,30);
     return `<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><h2>Arrivée sans dossard</h2><p>Heure figée à ${new Date(manualStamp).toLocaleTimeString('fr-FR')}.</p></div><button class="close" id="close-modal">×</button></div>
       <input class="manual-search" id="manual-search" value="${esc(manualQuery)}" placeholder="Nom, 3 premières lettres, classe ou n° de dossard">
       <div class="candidate-list">${candidates.map(s => `<button data-manual="${s.id}"><strong>#${s.bib}</strong><span>${esc(nameOf(s))} · ${esc(s.className)}</span><small>${esc(raceOf(s.raceId)?.name || '')}</small></button>`).join('')}</div></div></div>`;
