@@ -329,7 +329,7 @@
     while(size>minSize){
       doc.setFontSize(size);
       if(doc.getTextWidth(text)<=maxWidth) return size;
-      size-=1;
+      size-=0.5;
     }
     doc.setFontSize(minSize);
     return minSize;
@@ -348,23 +348,27 @@
     const first=String(s.firstName||'').trim();
     const last=String(s.lastName||'').trim().toUpperCase();
     const full=`${first} ${last}`.trim();
-    const maxWidth=104;
-    const oneLineSize=fitPdfText(doc,full,maxWidth,30,18);
+    const safeWidth=114;
 
-    if(doc.getTextWidth(full)<=maxWidth){
-      doc.text(full,centerX,145,{align:'center'});
-      return 154;
+    // Cas normal : nom bien présent, avec une taille généreuse.
+    const oneLineSize=fitPdfText(doc,full,safeWidth,34,18,'helvetica','bold');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(oneLineSize);
+
+    if(doc.getTextWidth(full)<=safeWidth){
+      doc.text(full,centerX,148,{align:'center'});
+      return 157;
     }
 
-    // Nom long : prénom puis NOM, chacun recalé indépendamment.
-    const firstSize=fitPdfText(doc,first,maxWidth,23,14);
+    // Cas exceptionnel : on sépare prénom et nom pour ne jamais toucher les côtés.
+    const firstSize=fitPdfText(doc,first,safeWidth,24,15,'helvetica','bold');
     doc.setFontSize(firstSize);
-    doc.text(first,centerX,140,{align:'center'});
+    doc.text(first,centerX,142,{align:'center'});
 
-    const lastSize=fitPdfText(doc,last,maxWidth,25,12);
+    const lastSize=fitPdfText(doc,last,safeWidth,28,13,'helvetica','bold');
     doc.setFontSize(lastSize);
-    doc.text(last,centerX,149,{align:'center'});
-    return 157;
+    doc.text(last,centerX,151,{align:'center'});
+    return 159;
   }
 
   async function exportBibs() {
@@ -384,39 +388,39 @@
       // Fond graphique fixe validé
       doc.addImage(background,'PNG',0,0,W,H);
 
-      // Code 128 : centré sous l'année, sans jamais masquer l'en-tête
+      // Code 128 : zone blanche large, centrée et protégée de la décoration.
       doc.setFillColor(255,255,255);
-      doc.rect(94,55,109,23,'F');
+      doc.rect(91,54,115,25,'F');
       const barCanvas=document.createElement('canvas');
       JsBarcode(barCanvas,String(s.bib),{
         format:'CODE128',
         displayValue:false,
-        height:92,
+        height:96,
         margin:14,
         width:2.5,
         background:'#ffffff',
         lineColor:'#000000'
       });
-      doc.addImage(barCanvas.toDataURL('image/png'),'PNG',101,59,95,15);
+      doc.addImage(barCanvas.toDataURL('image/png'),'PNG',98,58,101,17);
 
-      // Numéro : élément dominant, limité à la vraie largeur utile du panneau central
+      // Numéro : beaucoup plus dominant, avec adaptation automatique si 4 chiffres ou plus.
       const bib=String(s.bib);
-      const bibSize=fitPdfText(doc,bib,104,122,78);
+      const bibSize=fitPdfText(doc,bib,112,150,82,'helvetica','bold');
       doc.setFont('helvetica','bold');
       doc.setFontSize(bibSize);
-      doc.text(bib,centerX,126,{align:'center'});
+      doc.text(bib,centerX,132,{align:'center'});
 
-      // Nom/prénom adaptatif : 1 ligne si possible, sinon 2 lignes
+      // Nom/prénom : taille forte pour les noms usuels, réduction automatique sinon.
       const classY=drawStudentName(doc,s,centerX);
 
-      // Classe discrète
+      // Classe : secondaire, mais lisible.
       doc.setFont('helvetica','bold');
-      doc.setFontSize(11);
+      doc.setFontSize(11.5);
       doc.text(String(s.className||''),centerX,classY,{align:'center'});
 
-      // QR de secours : centré en bas, avec une vraie zone blanche de sécurité
+      // QR : centré en bas, assez grand pour être lu de près.
       doc.setFillColor(255,255,255);
-      doc.rect(127.5,160,42,42,'F');
+      doc.rect(126,160,45,44,'F');
       const holder=document.createElement('div');
       new QRCode(holder,{
         text:String(s.bib),
@@ -426,7 +430,7 @@
       });
       const qrCanvas=holder.querySelector('canvas'), qrImg=holder.querySelector('img');
       const qrData=qrCanvas ? qrCanvas.toDataURL('image/png') : qrImg?.src;
-      if(qrData) doc.addImage(qrData,'PNG',130.5,163,36,36);
+      if(qrData) doc.addImage(qrData,'PNG',130,164,37,37);
     });
 
     doc.save('dossards-cross-ada-lovelace-2026.pdf');
