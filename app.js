@@ -348,21 +348,22 @@
     const first=String(s.firstName||'').trim();
     const last=String(s.lastName||'').trim().toUpperCase();
     const full=`${first} ${last}`.trim();
-    const maxWidth=108;
-    const oneLineSize=fitPdfText(doc,full,maxWidth,29,17);
+    const maxWidth=104;
+    const oneLineSize=fitPdfText(doc,full,maxWidth,30,18);
 
     if(doc.getTextWidth(full)<=maxWidth){
-      doc.text(full,centerX,143,{align:'center'});
-      return 153;
+      doc.text(full,centerX,145,{align:'center'});
+      return 154;
     }
 
-    const firstSize=fitPdfText(doc,first,maxWidth,23,13);
+    // Nom long : prénom puis NOM, chacun recalé indépendamment.
+    const firstSize=fitPdfText(doc,first,maxWidth,23,14);
     doc.setFontSize(firstSize);
-    doc.text(first,centerX,139,{align:'center'});
+    doc.text(first,centerX,140,{align:'center'});
 
     const lastSize=fitPdfText(doc,last,maxWidth,25,12);
     doc.setFontSize(lastSize);
-    doc.text(last,centerX,148,{align:'center'});
+    doc.text(last,centerX,149,{align:'center'});
     return 157;
   }
 
@@ -383,27 +384,27 @@
       // Fond graphique fixe validé
       doc.addImage(background,'PNG',0,0,W,H);
 
-      // Code 128 : centré en haut, avec marge blanche de sécurité
+      // Code 128 : centré sous l'année, sans jamais masquer l'en-tête
       doc.setFillColor(255,255,255);
-      doc.rect(91,48,115,25,'F');
+      doc.rect(94,55,109,23,'F');
       const barCanvas=document.createElement('canvas');
       JsBarcode(barCanvas,String(s.bib),{
         format:'CODE128',
         displayValue:false,
-        height:90,
+        height:92,
         margin:14,
         width:2.5,
         background:'#ffffff',
         lineColor:'#000000'
       });
-      doc.addImage(barCanvas.toDataURL('image/png'),'PNG',98,52,101,17);
+      doc.addImage(barCanvas.toDataURL('image/png'),'PNG',101,59,95,15);
 
-      // Numéro : très dominant mais toujours contenu dans la zone centrale
+      // Numéro : élément dominant, limité à la vraie largeur utile du panneau central
       const bib=String(s.bib);
-      const bibSize=fitPdfText(doc,bib,106,120,76);
+      const bibSize=fitPdfText(doc,bib,104,122,78);
       doc.setFont('helvetica','bold');
       doc.setFontSize(bibSize);
-      doc.text(bib,centerX,125,{align:'center'});
+      doc.text(bib,centerX,126,{align:'center'});
 
       // Nom/prénom adaptatif : 1 ligne si possible, sinon 2 lignes
       const classY=drawStudentName(doc,s,centerX);
@@ -413,9 +414,9 @@
       doc.setFontSize(11);
       doc.text(String(s.className||''),centerX,classY,{align:'center'});
 
-      // QR de secours : 36 mm, centré en bas, avec quiet zone
+      // QR de secours : centré en bas, avec une vraie zone blanche de sécurité
       doc.setFillColor(255,255,255);
-      doc.rect(127.5,159,42,42,'F');
+      doc.rect(127.5,160,42,42,'F');
       const holder=document.createElement('div');
       new QRCode(holder,{
         text:String(s.bib),
@@ -425,7 +426,7 @@
       });
       const qrCanvas=holder.querySelector('canvas'), qrImg=holder.querySelector('img');
       const qrData=qrCanvas ? qrCanvas.toDataURL('image/png') : qrImg?.src;
-      if(qrData) doc.addImage(qrData,'PNG',130.5,162,36,36);
+      if(qrData) doc.addImage(qrData,'PNG',130.5,163,36,36);
     });
 
     doc.save('dossards-cross-ada-lovelace-2026.pdf');
