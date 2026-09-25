@@ -344,12 +344,96 @@
     return minSize;
   }
 
-  function loadBibBackground() {
-    return new Promise((resolve,reject)=>{
-      const img=new Image();
-      img.onload=()=>resolve(img);
-      img.onerror=()=>reject(new Error('Fond du dossard indisponible'));
-      img.src='./bib-background.png';
+  let bibBackgroundDataCache = '';
+
+  function parseB36(v) {
+    const n=parseInt(v,36);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function buildBibBackgroundData() {
+    if(bibBackgroundDataCache) return bibBackgroundDataCache;
+    const raw=(window.BIB_VECTOR_PARTS||[]).join(';');
+    if(!raw) throw new Error('Fond haute définition du dossard indisponible');
+
+    const canvas=document.createElement('canvas');
+    canvas.width=3508;
+    canvas.height=2480;
+    const ctx=canvas.getContext('2d');
+    if(!ctx) throw new Error('Impossible de préparer le fond du dossard');
+
+    ctx.fillStyle='#fff';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    const sx=canvas.width/1512;
+    const sy=canvas.height/1040;
+
+    const shapes=raw.split(';').filter(Boolean).map(item=>{
+      const cut=item.indexOf(':');
+      const depth=parseB36(item.slice(0,cut));
+      const pts=item.slice(cut+1).split(',');
+      let [x,y]=pts[0].split('.').map(parseB36);
+      const out=[[x,y]];
+      for(let i=1;i<pts.length;i++){
+        const [dx,dy]=pts[i].split('.').map(parseB36);
+        x+=dx; y+=dy; out.push([x,y]);
+      }
+      return {depth,pts:out};
+    }).sort((a,b)=>a.depth-b.depth);
+
+    ctx.imageSmoothingEnabled=false;
+    for(const shape of shapes){
+      if(shape.pts.length<3) continue;
+      ctx.beginPath();
+      ctx.moveTo(shape.pts[0][0]*sx,shape.pts[0][1]*sy);
+      for(let i=1;i<shape.pts.length;i++) ctx.lineTo(shape.pts[i][0]*sx,shape.pts[i][1]*sy);
+      ctx.closePath();
+      ctx.fillStyle=shape.depth%2 ? '#fff' : '#000';
+      ctx.fill();
+    }
+
+    bibBackgroundDataCache=canvas.toDataURL('image/png');
+    return bibBackgroundDataCache;
+  }
+
+  function drawVectorBarcode(doc,value,x,y,w,h) {
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    JsBarcode(svg,String(value),{
+      format:'CODE128',
+      displayValue:false,
+      height:100,
+      margin:12,
+      width:3,
+      background:'#ffffff',
+      lineColor:'#000000'
+    });
+
+    const view=(svg.getAttribute('viewBox')||'').trim().split(/\s+/).map(Number);
+    const sourceW=(view.length===4 && view[2]) || parseFloat(svg.getAttribute('width')) || 1;
+    const sourceH=(view.length===4 && view[3]) || parseFloat(svg.getAttribute('height')) || 1;
+
+    doc.setFillColor(255,255,255);
+    doc.rect(x-6,y-2,w+12,h+4,'F');
+    doc.setFillColor(0,0,0);
+
+    svg.querySelectorAll('rect').forEach(rect=>{
+      const rw=parseFloat(rect.getAttribute('width'))||0;
+      const rh=parseFloat(rect.getAttribute('height'))||0;
+      if(!rw || !rh || (rw>=sourceW*.9 && rh>=sourceH*.9)) return;
+
+      let tx=0,ty=0;
+      const transform=rect.parentElement?.getAttribute('transform')||'';
+      const m=transform.match(/translate\(\s*([-+\d.]+)(?:[,\s]+([-+\d.]+))?\s*\)/);
+      if(m){ tx=Number(m[1])||0; ty=Number(m[2])||0; }
+
+      const rx=(parseFloat(rect.getAttribute('x'))||0)+tx;
+      const ry=(parseFloat(rect.getAttribute('y'))||0)+ty;
+      doc.rect(
+        x+(rx/sourceW)*w,
+        y+(ry/sourceH)*h,
+        (rw/sourceW)*w,
+        (rh/sourceH)*h,
+        'F'
+      );
     });
   }
 
@@ -383,9 +467,9 @@
   async function exportBibs() {
     if(!window.jspdf?.jsPDF || !window.JsBarcode || !window.QRCode) return notify('Module dossards indisponible. Recharge avec Internet.');
 
-    let background;
-    try { background=await loadBibBackground(); }
-    catch(e){ return notify(e.message || 'Fond du dossard indisponible'); }
+    let backgroundData;
+    try { backgroundData=buildBibBackgroundData(); }
+    catch(e){ return notify(e.message || 'Fond haute définition du dossard indisponible'); }
 
     const {jsPDF}=window.jspdf;
     const doc=new jsPDF({unit:'mm',format:'a4',orientation:'landscape'});
@@ -394,23 +478,11 @@
     state.students.forEach((s,i)=>{
       if(i) doc.addPage('a4','landscape');
 
-      // Fond graphique fixe validé
-      doc.addImage(background,'PNG',0,0,W,H,undefined,'NONE');
+      // Fond reconstruit à 300 dpi depuis les tracés noir/blanc et réutilisé sur toutes les pages.
+      doc.addImage(backgroundData,'PNG',0,0,W,H,'bibBackgroundHD','FAST');
 
-      // Code 128 : zone blanche large, centrée et protégée de la décoration.
-      doc.setFillColor(255,255,255);
-      doc.rect(91,54,115,25,'F');
-      const barCanvas=document.createElement('canvas');
-      JsBarcode(barCanvas,String(s.bib),{
-        format:'CODE128',
-        displayValue:false,
-        height:320,
-        margin:42,
-        width:8,
-        background:'#ffffff',
-        lineColor:'#000000'
-      });
-      doc.addImage(barCanvas.toDataURL('image/png'),'PNG',98,58,101,17,undefined,'NONE');
+      // Code 128 entièrement vectoriel : aucune pixellisation, même en zoomant ou à l'impression.
+      drawVectorBarcode(doc,String(s.bib),98,58,101,17);
 
       // Numéro : beaucoup plus dominant, avec adaptation automatique si 4 chiffres ou plus.
       const bib=String(s.bib);
