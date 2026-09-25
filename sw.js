@@ -1,10 +1,11 @@
-const CACHE = 'cross-college-v6';
+const CACHE = 'cross-college-v7';
 const LOCAL = ['./','./index.html','./styles.css','./app.js','./manifest.webmanifest'];
 const EXTERNAL = [
   'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js',
   'https://cdn.jsdelivr.net/npm/jspdf@3.0.1/dist/jspdf.umd.min.js',
   'https://cdn.jsdelivr.net/npm/jspdf-autotable@5.0.2/dist/jspdf.plugin.autotable.min.js',
-  'https://cdn.jsdelivr.net/npm/jsbarcode@3.12.1/dist/JsBarcode.all.min.js'
+  'https://cdn.jsdelivr.net/npm/jsbarcode@3.12.1/dist/JsBarcode.all.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'
 ];
 self.addEventListener('install', e => e.waitUntil((async () => {
   const cache = await caches.open(CACHE);
