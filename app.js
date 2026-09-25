@@ -2,7 +2,7 @@
   'use strict';
 
   const STORAGE_KEY = 'cross-college-state-v2';
-  const EMPTY = { students: [], races: [], arrivals: [], classTeachers: {}, tab: 'students', notice: 'Scanner en attente', lastScan: '', resultRaceId: '' };
+  const EMPTY = { students: [], races: [], arrivals: [], classTeachers: {}, crossDistanceM: 0, tab: 'students', notice: 'Scanner en attente', lastScan: '', resultRaceId: '' };
   const DEMO = [
     [101,'DUPONT','Lina','6A','6e','F','Mme Martin'], [102,'MARTIN','Noé','6A','6e','M','Mme Martin'],
     [103,'BERNARD','Inès','6B','6e','F','M. Robert'], [104,'PETIT','Lucas','6B','6e','M','M. Robert'],
@@ -29,7 +29,7 @@
     return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2,'0')}`;
   };
   const avg = a => a.length ? a.reduce((x,y) => x + y, 0) / a.length : null;
-  const speedKmh = s => { const r=raceOf(s.raceId); if(!r?.distanceM || !s.elapsedMs) return null; return (r.distanceM / (s.elapsedMs / 1000)) * 3.6; };
+  const speedKmh = s => { if(!state.crossDistanceM || !s.elapsedMs) return null; return (state.crossDistanceM / (s.elapsedMs / 1000)) * 3.6; };
   const fmtSpeed = s => { const v=speedKmh(s); return v==null ? '—' : `${v.toFixed(1)} km/h`; };
   const classNames = () => [...new Set(state.students.map(s => s.className).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
 
@@ -41,7 +41,7 @@
   function notify(msg) { state.notice = msg; save(); render(); }
 
   function render() {
-    const tabs = [['students','1. Élèves & dossards'],['races','2. Courses'],['timing','3. Chronométrage'],['results','4. Résultats']];
+    const tabs = [['students','1. Élèves & dossards'],['races','2. Courses'],['timing','3. Chronométrage'],['results','4. Résultats'],['settings','5. Réglages']];
     app.innerHTML = `<div class="app-shell">
       <header class="topbar"><div><h1>Cross Collège</h1><p>Chronométrage iPad · dossards · résultats</p></div><div class="status-pill">${esc(state.notice)}</div></header>
       <nav class="tabs">${tabs.map(([id,label]) => `<button data-tab="${id}" class="${state.tab===id?'active':''}">${label}</button>`).join('')}</nav>
@@ -54,7 +54,8 @@
     if (state.tab === 'students') return studentsPage();
     if (state.tab === 'races') return racesPage();
     if (state.tab === 'timing') return timingPage();
-    return resultsPage();
+    if (state.tab === 'results') return resultsPage();
+    return settingsPage();
   }
 
   function studentsPage() {
@@ -82,7 +83,6 @@
     return `<section class="page-grid">
       <div class="card"><h2>Créer une course</h2>
         <label class="field">Nom de la course<input id="race-name" placeholder="Ex. 6e filles"></label>
-        <label class="field">Distance de la course (mètres)<input id="race-distance" type="number" min="100" step="10" inputmode="numeric" placeholder="Ex. 1500"></label>
         <div class="field"><span>Niveaux</span><div class="chip-row">${levels.map(l => `<button class="chip" data-level="${esc(l)}">${esc(l)}</button>`).join('')}</div></div>
         <div class="field"><span>Sexe</span><div class="chip-row"><button class="chip" data-sex="F">Filles</button><button class="chip" data-sex="M">Garçons</button><button class="chip" data-sex="X">Non renseigné</button></div></div>
         <button class="button primary full" id="create-race">Créer et affecter les élèves</button>
@@ -90,7 +90,7 @@
       <div class="card"><h2>Courses</h2><div class="race-list">${state.races.length ? state.races.map(r => {
         const runners = state.students.filter(s => s.raceId === r.id);
         const done = runners.filter(s => s.elapsedMs != null).length;
-        return `<div class="race-row"><div><strong>${esc(r.name)}</strong><span>${runners.length} élèves · ${r.levels.map(esc).join(', ')} · ${r.sexes.join('/')} · ${r.distanceM ? `${r.distanceM} m` : 'distance non renseignée'}</span>${r.startedAt ? `<span>Démarrée à ${new Date(r.startedAt).toLocaleTimeString('fr-FR')}</span>` : ''}${r.endedAt ? `<span>Terminée à ${new Date(r.endedAt).toLocaleTimeString('fr-FR')}</span>` : ''}</div>
+        return `<div class="race-row"><div><strong>${esc(r.name)}</strong><span>${runners.length} élèves · ${r.levels.map(esc).join(', ')} · ${r.sexes.join('/')} · ${state.crossDistanceM ? `${state.crossDistanceM} m` : 'distance à régler'}</span>${r.startedAt ? `<span>Démarrée à ${new Date(r.startedAt).toLocaleTimeString('fr-FR')}</span>` : ''}${r.endedAt ? `<span>Terminée à ${new Date(r.endedAt).toLocaleTimeString('fr-FR')}</span>` : ''}</div>
           <div class="race-actions">${!r.startedAt ? `<button class="button danger-ghost" data-delete="${r.id}">Supprimer</button><button class="button start" data-start="${r.id}">DÉPART</button>` : r.endedAt ? `<span class="started">${done}/${runners.length} classés · ${runners.length-done} absents/non arrivés</span><button class="button" data-reopen="${r.id}">Réouvrir</button>` : `<span class="started">${done}/${runners.length} arrivés</span><button class="button finish-race" data-finish-race="${r.id}">TERMINER</button>`}</div></div>`;
       }).join('') : '<p class="empty">Aucune course créée.</p>'}</div></div>
     </section>`;
@@ -109,25 +109,56 @@
       </div>
       <div class="card"><h2>Courses actives</h2><div class="race-list">${active.length ? active.map(r => {
         const runners = state.students.filter(s => s.raceId === r.id), done = runners.filter(s => s.elapsedMs != null).length;
-        return `<div class="race-row compact"><div><strong>${esc(r.name)}</strong><span>Départ ${new Date(r.startedAt).toLocaleTimeString('fr-FR')} · ${r.distanceM ? `${r.distanceM} m` : 'distance ?'}</span></div><div class="race-actions"><strong>${done}/${runners.length}</strong><button class="button finish-race" data-finish-race="${r.id}">TERMINER</button></div></div>`;
+        return `<div class="race-row compact"><div><strong>${esc(r.name)}</strong><span>Départ ${new Date(r.startedAt).toLocaleTimeString('fr-FR')} · ${state.crossDistanceM ? `${state.crossDistanceM} m` : 'distance à régler'}</span></div><div class="race-actions"><strong>${done}/${runners.length}</strong><button class="button finish-race" data-finish-race="${r.id}">TERMINER</button></div></div>`;
       }).join('') : '<p class="empty">Aucune course démarrée.</p>'}</div></div>
     </section>`;
   }
 
   function resultsPage() {
     const g = rankings(), done = state.students.filter(s => s.elapsedMs != null).length;
-    const selectedRaceId = state.resultRaceId && state.races.some(r=>r.id===state.resultRaceId) ? state.resultRaceId : (state.races[0]?.id || '');
+    const ended = state.races.filter(r => r.endedAt);
+    const selectedRaceId = state.resultRaceId && ended.some(r=>r.id===state.resultRaceId) ? state.resultRaceId : (ended[0]?.id || '');
+    const selectedRace = raceOf(selectedRaceId);
     const raceRows = g.byRace.filter(r=>r.raceId===selectedRaceId);
-    return `<section class="page-grid">
-      <div class="card span-2"><div class="card-head"><div><h2>Résultats</h2><p>${done} élèves classés. Les élèves sans arrivée restent non classés/absents.</p></div></div>
-        <div class="actions"><button class="button primary" id="excel" ${done?'':'disabled'}>Exporter Excel</button><button class="button" id="results-pdf" ${done?'':'disabled'}>Exporter PDF</button></div>
+    const runners = selectedRace ? state.students.filter(s=>s.raceId===selectedRace.id) : [];
+    return `<section class="results-layout">
+      <div class="card results-top">
+        <div class="card-head"><div><h2>Résultats</h2><p>${done} élèves classés · ${ended.length} course(s) terminée(s).</p></div>
+          <button class="button primary" id="export-all-results" ${done?'':'disabled'}>Exporter tous les résultats</button>
+        </div>
       </div>
-      <div class="card span-2 table-card"><div class="card-head"><div><h3>Classement d’une course</h3><p>Choisis par exemple la course « 6e garçons ».</p></div><select id="result-race">${state.races.map(r=>`<option value="${r.id}" ${r.id===selectedRaceId?'selected':''}>${esc(r.name)}</option>`).join('')}</select></div>
-        <table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th><th>Vitesse moy.</th></tr></thead><tbody>${raceRows.map(r=>`<tr><td>${r.rank}</td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td>${r.time}</td><td>${r.speed}</td></tr>`).join('')}</tbody></table>
+
+      <div class="card results-sidebar">
+        <h3>Courses terminées</h3>
+        <div class="race-list">${ended.length ? ended.map(r => {
+          const rr=state.students.filter(s=>s.raceId===r.id), classified=rr.filter(s=>s.elapsedMs!=null).length;
+          return `<div class="result-race-item ${r.id===selectedRaceId?'selected':''}">
+            <div><strong>${esc(r.name)}</strong><span>${classified}/${rr.length} classés</span></div>
+            <div class="result-race-actions"><button class="button" data-view-race="${r.id}">Voir résultats</button><button class="button" data-export-race="${r.id}">Exporter résultats</button></div>
+          </div>`;
+        }).join('') : '<p class="empty">Aucune course terminée pour le moment.</p>'}</div>
       </div>
+
+      <div class="card results-main table-card">
+        ${selectedRace ? `<div class="card-head"><div><h3>${esc(selectedRace.name)}</h3><p>${runners.filter(s=>s.elapsedMs!=null).length} classés · ${runners.filter(s=>s.elapsedMs==null).length} absents/non classés · ${state.crossDistanceM ? state.crossDistanceM+' m' : 'distance non renseignée'}</p></div></div>
+        <table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th><th>Vitesse moy.</th></tr></thead><tbody>${raceRows.map(r=>`<tr><td>${r.rank}</td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td>${r.time}</td><td>${r.speed}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">Sélectionne une course terminée pour afficher son classement.</p>'}
+      </div>
+
       <div class="card table-card"><h3>Meilleure classe par niveau</h3><table><thead><tr><th>Niveau</th><th>Rang</th><th>Classe</th><th>Classés</th><th>Inscrits</th><th>Temps moyen</th></tr></thead><tbody>${g.classAverages.map(r => `<tr><td>${esc(r.level)}</td><td>${r.rank}</td><td>${esc(r.className)}</td><td>${r.count}</td><td>${r.enrolled}</td><td>${r.average}</td></tr>`).join('')}</tbody></table></div>
-      <div class="card table-card"><h3>Meilleure classe du collège</h3><p class="hint">Comme les distances peuvent changer selon les niveaux, ce classement utilise la vitesse moyenne.</p><table><thead><tr><th>Rang</th><th>Classe</th><th>Niveau</th><th>Classés</th><th>Inscrits</th><th>Vitesse moy.</th></tr></thead><tbody>${g.classOverall.map(r => `<tr><td>${r.rank}</td><td>${esc(r.className)}</td><td>${esc(r.level)}</td><td>${r.count}</td><td>${r.enrolled}</td><td>${r.averageSpeed}</td></tr>`).join('')}</tbody></table></div>
-      <div class="card span-2 table-card"><h3>Classement des professeurs</h3><p class="hint">Même principe : moyenne des vitesses des élèves classés des classes rattachées au professeur.</p><table><thead><tr><th>Rang</th><th>Professeur</th><th>Classes</th><th>Élèves classés</th><th>Élèves inscrits</th><th>Vitesse moy.</th></tr></thead><tbody>${g.teacherAverages.map(r => `<tr><td>${r.rank}</td><td>${esc(r.teacher)}</td><td>${esc(r.classes.join(', '))}</td><td>${r.count}</td><td>${r.enrolled}</td><td>${r.averageSpeed}</td></tr>`).join('')}</tbody></table></div>
+      <div class="card table-card"><h3>Meilleure classe du collège</h3><table><thead><tr><th>Rang</th><th>Classe</th><th>Niveau</th><th>Classés</th><th>Inscrits</th><th>Temps moyen</th></tr></thead><tbody>${g.classOverall.map(r => `<tr><td>${r.rank}</td><td>${esc(r.className)}</td><td>${esc(r.level)}</td><td>${r.count}</td><td>${r.enrolled}</td><td>${r.average}</td></tr>`).join('')}</tbody></table></div>
+      <div class="card span-2 table-card"><h3>Classement des professeurs</h3><table><thead><tr><th>Rang</th><th>Professeur</th><th>Classes</th><th>Élèves classés</th><th>Élèves inscrits</th><th>Temps moyen</th></tr></thead><tbody>${g.teacherAverages.map(r => `<tr><td>${r.rank}</td><td>${esc(r.teacher)}</td><td>${esc(r.classes.join(', '))}</td><td>${r.count}</td><td>${r.enrolled}</td><td>${r.average}</td></tr>`).join('')}</tbody></table></div>
+    </section>`;
+  }
+
+  function settingsPage() {
+    return `<section class="page-grid">
+      <div class="card span-2"><div class="card-head"><div><h2>Réglages du cross</h2><p>Paramètres communs à toutes les courses.</p></div></div>
+        <label class="field">Distance unique du cross (mètres)
+          <input id="cross-distance" type="number" min="100" step="10" inputmode="numeric" value="${state.crossDistanceM || ''}" placeholder="Ex. 1500">
+        </label>
+        <div class="actions"><button class="button primary" id="save-settings">Enregistrer la distance</button></div>
+        <p class="hint">Cette distance est utilisée pour calculer la vitesse moyenne de chaque élève. Tous les classements de classes et de professeurs restent calculés avec la moyenne des temps.</p>
+      </div>
     </section>`;
   }
 
@@ -158,19 +189,20 @@
     document.querySelectorAll('[data-manual]').forEach(b => b.onclick = () => manualFinish(b.dataset.manual));
     $('#undo')?.addEventListener('click', undoLast);
     $('#test-scan')?.addEventListener('click', () => notify('Mode test : scanne un dossard. Le code doit apparaître ici.'));
-    $('#excel')?.addEventListener('click', exportExcel);
-    $('#results-pdf')?.addEventListener('click', exportResultsPdf);
-    $('#result-race')?.addEventListener('change', e => { state.resultRaceId=e.target.value; save(); render(); });
+    $('#export-all-results')?.addEventListener('click', exportResultsPdf);
+    document.querySelectorAll('[data-view-race]').forEach(b => b.onclick = () => { state.resultRaceId=b.dataset.viewRace; save(); render(); });
+    document.querySelectorAll('[data-export-race]').forEach(b => b.onclick = () => exportRacePdf(b.dataset.exportRace));
+    $('#save-settings')?.addEventListener('click', saveSettings);
   }
 
   function loadDemo() {
     if (state.students.length && !confirm('Remplacer les données actuelles par la démonstration ?')) return;
     const students = DEMO.map(([bib,lastName,firstName,className,level,sex,teacher]) => ({ id:uid(),bib,lastName,firstName,className,level,sex,teacher }));
-    const r6 = { id:uid(), name:'Démo 6e', levels:['6e'], sexes:['F','M'], distanceM:1000, createdAt:Date.now() };
-    const r5 = { id:uid(), name:'Démo 5e', levels:['5e'], sexes:['F','M'], distanceM:1200, createdAt:Date.now() };
+    const r6 = { id:uid(), name:'Démo 6e', levels:['6e'], sexes:['F','M'], createdAt:Date.now() };
+    const r5 = { id:uid(), name:'Démo 5e', levels:['5e'], sexes:['F','M'], createdAt:Date.now() };
     students.forEach(s => { if(s.level==='6e') s.raceId=r6.id; if(s.level==='5e') s.raceId=r5.id; });
     const classTeachers={}; students.forEach(s=>{ if(s.teacher){ if(!classTeachers[s.className]) classTeachers[s.className]=[]; if(!classTeachers[s.className].includes(s.teacher)) classTeachers[s.className].push(s.teacher); }}); Object.keys(classTeachers).forEach(k=>classTeachers[k]=classTeachers[k].slice(0,2));
-    state = { ...EMPTY, students, races:[r6,r5], classTeachers, notice:'Démo chargée : dossards 101 à 112. Lance une course puis scanne.' };
+    state = { ...EMPTY, students, races:[r6,r5], classTeachers, crossDistanceM:1000, notice:'Démo chargée : dossards 101 à 112. Distance test : 1000 m.' };
     save(); render();
   }
 
@@ -212,15 +244,13 @@
 
   function createRace() {
     const name=$('#race-name')?.value.trim();
-    const distanceM=Number($('#race-distance')?.value);
     const levels=[...document.querySelectorAll('[data-level].selected')].map(x=>x.dataset.level);
     const sexes=[...document.querySelectorAll('[data-sex].selected')].map(x=>x.dataset.sex);
     if(!name) return notify('Donne un nom à la course');
-    if(!Number.isFinite(distanceM) || distanceM <= 0) return notify('Renseigne la distance de la course en mètres');
     if(!levels.length || !sexes.length) return notify('Sélectionne au moins un niveau et un sexe');
     const runners=state.students.filter(s => !s.raceId && levels.includes(s.level) && sexes.includes(s.sex));
     if(!runners.length) return notify('Aucun élève disponible pour ces critères');
-    const race={id:uid(),name,levels,sexes,distanceM:Math.round(distanceM),createdAt:Date.now()}; state.races.push(race); runners.forEach(s=>s.raceId=race.id);
+    const race={id:uid(),name,levels,sexes,createdAt:Date.now()}; state.races.push(race); runners.forEach(s=>s.raceId=race.id);
     state.notice=`${name} créée : ${runners.length} élèves`; save(); render();
   }
   function deleteRace(id) { const r=raceOf(id); if(!r || r.startedAt) return; if(!confirm(`Supprimer « ${r.name} » ?`)) return; state.students.forEach(s=>{if(s.raceId===id) delete s.raceId;}); state.races=state.races.filter(x=>x.id!==id); save(); render(); }
@@ -233,7 +263,7 @@
     if(student.elapsedMs != null) return notify(`${nameOf(student)} est déjà arrivé en ${fmt(student.elapsedMs)}`);
     const race=raceOf(student.raceId); if(!race?.startedAt) return notify(`La course de ${nameOf(student)} n’a pas démarré`); if(race.endedAt) return notify(`La course « ${race.name} » est terminée. Réouvre-la pour enregistrer cette arrivée.`);
     const elapsedMs=Math.max(0,stamp-race.startedAt); student.finishedAt=stamp; student.elapsedMs=elapsedMs;
-    state.arrivals.push({id:uid(),studentId:student.id,raceId:race.id,stamp,elapsedMs,method}); state.notice=`#${student.bib} ${nameOf(student)} — ${fmt(elapsedMs)}${race.distanceM ? ` — ${fmtSpeed(student)}` : ''}`; save(); render();
+    state.arrivals.push({id:uid(),studentId:student.id,raceId:race.id,stamp,elapsedMs,method}); state.notice=`#${student.bib} ${nameOf(student)} — ${fmt(elapsedMs)}${state.crossDistanceM ? ` — ${fmtSpeed(student)}` : ''}`; save(); render();
   }
   function scan(raw) { state.lastScan=raw; const m=String(raw).trim().match(/(\d+)/); if(!m) return notify(`Code non reconnu : ${raw}`); const bib=Number(m[1]); const s=state.students.find(x=>x.bib===bib); if(!s) return notify(`Dossard ${bib} inconnu`); finish(s,Date.now(),'scan'); }
   function manualFinish(id) { const s=state.students.find(x=>x.id===id); if(!s || manualStamp===null) return; const stamp=manualStamp; manualStamp=null; manualQuery=''; finish(s,stamp,'manual'); }
@@ -250,9 +280,9 @@
     const lc=new Map(); finished.forEach(s=>{const k=`${s.level}|${s.className}`; if(!lc.has(k)) lc.set(k,[]); lc.get(k).push(s);});
     const levels=new Map(); [...lc.entries()].forEach(([k,a])=>{const[level,className]=k.split('|'); if(!levels.has(level)) levels.set(level,[]); const enrolled=state.students.filter(s=>s.level===level&&s.className===className).length; levels.get(level).push({className,count:a.length,enrolled,averageMs:avg(a.map(s=>s.elapsedMs))});});
     [...levels.entries()].sort().forEach(([level,a])=>{a.sort((x,y)=>x.averageMs-y.averageMs);a.forEach((x,i)=>classAverages.push({level,rank:i+1,className:x.className,count:x.count,enrolled:x.enrolled,average:fmt(x.averageMs)}));});
-    [...classes.entries()].map(([className,a])=>{ const speeds=a.map(speedKmh).filter(v=>v!=null); return {className,level:a[0]?.level||'',count:speeds.length,enrolled:state.students.filter(s=>s.className===className).length,averageSpeed:avg(speeds)}; }).filter(x=>x.count>0).sort((a,b)=>b.averageSpeed-a.averageSpeed).forEach((x,i)=>classOverall.push({rank:i+1,className:x.className,level:x.level,count:x.count,enrolled:x.enrolled,averageSpeed:`${x.averageSpeed.toFixed(1)} km/h`}));
+    [...classes.entries()].map(([className,a])=>({className,level:a[0]?.level||'',count:a.length,enrolled:state.students.filter(s=>s.className===className).length,averageMs:avg(a.map(s=>s.elapsedMs))})).filter(x=>x.count>0).sort((a,b)=>a.averageMs-b.averageMs).forEach((x,i)=>classOverall.push({rank:i+1,className:x.className,level:x.level,count:x.count,enrolled:x.enrolled,average:fmt(x.averageMs)}));
     const teachers=new Map(); Object.entries(state.classTeachers||{}).forEach(([className,names])=>{ (names||[]).filter(Boolean).forEach(teacher=>{ if(!teachers.has(teacher)) teachers.set(teacher,{classes:new Set(),students:[]}); const obj=teachers.get(teacher); obj.classes.add(className); obj.students.push(...finished.filter(s=>s.className===className)); }); });
-    [...teachers.entries()].map(([teacher,obj])=>{ const unique=[...new Map(obj.students.map(s=>[s.id,s])).values()]; const speeds=unique.map(speedKmh).filter(v=>v!=null); const enrolled=state.students.filter(s=>obj.classes.has(s.className)).length; return {teacher,classes:[...obj.classes].sort(),count:speeds.length,enrolled,averageSpeed:avg(speeds)}; }).filter(x=>x.count>0).sort((a,b)=>b.averageSpeed-a.averageSpeed).forEach((x,i)=>teacherAverages.push({rank:i+1,teacher:x.teacher,classes:x.classes,count:x.count,enrolled:x.enrolled,averageSpeed:`${x.averageSpeed.toFixed(1)} km/h`}));
+    [...teachers.entries()].map(([teacher,obj])=>{ const unique=[...new Map(obj.students.map(s=>[s.id,s])).values()]; const enrolled=state.students.filter(s=>obj.classes.has(s.className)).length; return {teacher,classes:[...obj.classes].sort(),count:unique.length,enrolled,averageMs:avg(unique.map(s=>s.elapsedMs))}; }).filter(x=>x.count>0).sort((a,b)=>a.averageMs-b.averageMs).forEach((x,i)=>teacherAverages.push({rank:i+1,teacher:x.teacher,classes:x.classes,count:x.count,enrolled:x.enrolled,average:fmt(x.averageMs)}));
     return {individual,byRace,byClass,classAverages,classOverall,teacherAverages};
   }
 
@@ -263,8 +293,8 @@
     XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(g.byRace.map(r=>({Course:r.raceName,Rang:r.rank,Dossard:r.bib,Élève:r.name,Classe:r.className,Temps:r.time,'Vitesse moyenne':r.speed}))),'Par course');
     XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(g.byClass.map(r=>({Classe:r.className,Rang:r.rank,Dossard:r.bib,Élève:r.name,Sexe:r.sex,Temps:r.time}))),'Par classe');
     XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(g.classAverages.map(r=>({Niveau:r.level,Rang:r.rank,Classe:r.className,Classés:r.count,Inscrits:r.enrolled,'Temps moyen':r.average}))),'Classes par niveau');
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(g.classOverall.map(r=>({Rang:r.rank,Classe:r.className,Niveau:r.level,Classés:r.count,Inscrits:r.enrolled,'Vitesse moyenne':r.averageSpeed}))),'Classes collège');
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(g.teacherAverages.map(r=>({Rang:r.rank,Professeur:r.teacher,Classes:r.classes.join(', '),'Élèves classés':r.count,'Élèves inscrits':r.enrolled,'Vitesse moyenne':r.averageSpeed}))),'Professeurs');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(g.classOverall.map(r=>({Rang:r.rank,Classe:r.className,Niveau:r.level,Classés:r.count,Inscrits:r.enrolled,'Temps moyen':r.average}))),'Classes collège');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(g.teacherAverages.map(r=>({Rang:r.rank,Professeur:r.teacher,Classes:r.classes.join(', '),'Élèves classés':r.count,'Élèves inscrits':r.enrolled,'Temps moyen':r.average}))),'Professeurs');
     XLSX.writeFile(wb,'resultats-cross.xlsx');
   }
 
@@ -277,9 +307,29 @@
     pdfTable(doc,'Classement par course',['Course','Rang','Dossard','Élève','Classe','Temps','Vitesse'],g.byRace.map(r=>[r.raceName,r.rank,r.bib,r.name,r.className,r.time,r.speed]),false);
     pdfTable(doc,'Classement par classe',['Classe','Rang','Dossard','Élève','Sexe','Temps'],g.byClass.map(r=>[r.className,r.rank,r.bib,r.name,r.sex,r.time]),false);
     pdfTable(doc,'Classement des classes par niveau',['Niveau','Rang','Classe','Classés','Inscrits','Temps moyen'],g.classAverages.map(r=>[r.level,r.rank,r.className,r.count,r.enrolled,r.average]),false);
-    pdfTable(doc,'Classement des classes du collège',['Rang','Classe','Niveau','Classés','Inscrits','Vitesse moyenne'],g.classOverall.map(r=>[r.rank,r.className,r.level,r.count,r.enrolled,r.averageSpeed]),false);
-    pdfTable(doc,'Classement des professeurs',['Rang','Professeur','Classes','Classés','Inscrits','Vitesse moyenne'],g.teacherAverages.map(r=>[r.rank,r.teacher,r.classes.join(', '),r.count,r.enrolled,r.averageSpeed]),false);
+    pdfTable(doc,'Classement des classes du collège',['Rang','Classe','Niveau','Classés','Inscrits','Temps moyen'],g.classOverall.map(r=>[r.rank,r.className,r.level,r.count,r.enrolled,r.average]),false);
+    pdfTable(doc,'Classement des professeurs',['Rang','Professeur','Classes','Classés','Inscrits','Temps moyen'],g.teacherAverages.map(r=>[r.rank,r.teacher,r.classes.join(', '),r.count,r.enrolled,r.average]),false);
     doc.save('resultats-cross.pdf');
+  }
+
+  function exportRacePdf(raceId) {
+    const race=raceOf(raceId); if(!race) return;
+    const g=rankings(), rows=g.byRace.filter(r=>r.raceId===raceId);
+    if(!window.jspdf?.jsPDF) return notify('Module PDF indisponible');
+    const {jsPDF}=window.jspdf, doc=new jsPDF({unit:'mm',format:'a4'});
+    if(typeof doc.autoTable !== 'function') return notify('Module tableau PDF indisponible');
+    doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.text(race.name,14,18);
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.text(`${state.crossDistanceM ? state.crossDistanceM+' m · ' : ''}${rows.length} classés`,14,25);
+    doc.autoTable({head:[['Rang','Dossard','Élève','Classe','Temps','Vitesse moy.']],body:rows.map(r=>[r.rank,r.bib,r.name,r.className,r.time,r.speed]),startY:30,styles:{fontSize:9},headStyles:{fillColor:[15,23,42]}});
+    doc.save(`resultats-${race.name.toLowerCase().replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'') || 'course'}.pdf`);
+  }
+
+  function saveSettings() {
+    const distance=Number($('#cross-distance')?.value);
+    if(!Number.isFinite(distance) || distance<=0) return notify('Renseigne une distance valide en mètres');
+    state.crossDistanceM=Math.round(distance);
+    state.notice=`Distance du cross enregistrée : ${state.crossDistanceM} m`;
+    save(); render();
   }
 
   function exportBibs() {
