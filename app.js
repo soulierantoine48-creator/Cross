@@ -41,7 +41,7 @@
   function notify(msg) { state.notice = msg; save(); render(); }
 
   function render() {
-    const tabs = [['students','1. Élèves & dossards'],['races','2. Courses'],['timing','3. Chronométrage'],['results','4. Résultats'],['settings','5. Réglages']];
+    const tabs = [['students','1. Élèves & dossards'],['races','2. Courses'],['timing','3. Chronométrage'],['results','4. Résultats']];
     app.innerHTML = `<div class="app-shell">
       <header class="topbar"><div><h1>Cross Collège</h1><p>Chronométrage iPad · dossards · résultats</p></div><div class="status-pill">${esc(state.notice)}</div></header>
       <nav class="tabs">${tabs.map(([id,label]) => `<button data-tab="${id}" class="${state.tab===id?'active':''}">${label}</button>`).join('')}</nav>
@@ -54,8 +54,7 @@
     if (state.tab === 'students') return studentsPage();
     if (state.tab === 'races') return racesPage();
     if (state.tab === 'timing') return timingPage();
-    if (state.tab === 'results') return resultsPage();
-    return settingsPage();
+    return resultsPage();
   }
 
   function studentsPage() {
@@ -81,6 +80,9 @@
   function racesPage() {
     const levels = [...new Set(state.students.map(s => s.level).filter(Boolean))].sort();
     return `<section class="page-grid">
+      <div class="card span-2"><div class="card-head"><div><h2>Paramètres du cross</h2><p>Réglage commun à toutes les courses.</p></div><strong>${state.crossDistanceM ? `${state.crossDistanceM} m` : 'À renseigner'}</strong></div>
+        <div class="inline-setting"><label class="field">Distance unique du cross (mètres)<input id="cross-distance" type="number" min="100" step="10" inputmode="numeric" value="${state.crossDistanceM || ''}" placeholder="Ex. 1500"></label><button class="button primary" id="save-settings">Enregistrer</button></div>
+      </div>
       <div class="card"><h2>Créer une course</h2>
         <label class="field">Nom de la course<input id="race-name" placeholder="Ex. 6e filles"></label>
         <div class="field"><span>Niveaux</span><div class="chip-row">${levels.map(l => `<button class="chip" data-level="${esc(l)}">${esc(l)}</button>`).join('')}</div></div>
@@ -147,18 +149,6 @@
       <div class="card table-card"><h3>Meilleure classe par niveau</h3><table><thead><tr><th>Niveau</th><th>Rang</th><th>Classe</th><th>Classés</th><th>Inscrits</th><th>Temps moyen</th></tr></thead><tbody>${g.classAverages.map(r => `<tr><td>${esc(r.level)}</td><td>${r.rank}</td><td>${esc(r.className)}</td><td>${r.count}</td><td>${r.enrolled}</td><td>${r.average}</td></tr>`).join('')}</tbody></table></div>
       <div class="card table-card"><h3>Meilleure classe du collège</h3><table><thead><tr><th>Rang</th><th>Classe</th><th>Niveau</th><th>Classés</th><th>Inscrits</th><th>Temps moyen</th></tr></thead><tbody>${g.classOverall.map(r => `<tr><td>${r.rank}</td><td>${esc(r.className)}</td><td>${esc(r.level)}</td><td>${r.count}</td><td>${r.enrolled}</td><td>${r.average}</td></tr>`).join('')}</tbody></table></div>
       <div class="card span-2 table-card"><h3>Classement des professeurs</h3><table><thead><tr><th>Rang</th><th>Professeur</th><th>Classes</th><th>Élèves classés</th><th>Élèves inscrits</th><th>Temps moyen</th></tr></thead><tbody>${g.teacherAverages.map(r => `<tr><td>${r.rank}</td><td>${esc(r.teacher)}</td><td>${esc(r.classes.join(', '))}</td><td>${r.count}</td><td>${r.enrolled}</td><td>${r.average}</td></tr>`).join('')}</tbody></table></div>
-    </section>`;
-  }
-
-  function settingsPage() {
-    return `<section class="page-grid">
-      <div class="card span-2"><div class="card-head"><div><h2>Réglages du cross</h2><p>Paramètres communs à toutes les courses.</p></div></div>
-        <label class="field">Distance unique du cross (mètres)
-          <input id="cross-distance" type="number" min="100" step="10" inputmode="numeric" value="${state.crossDistanceM || ''}" placeholder="Ex. 1500">
-        </label>
-        <div class="actions"><button class="button primary" id="save-settings">Enregistrer la distance</button></div>
-        <p class="hint">Cette distance est utilisée pour calculer la vitesse moyenne de chaque élève. Tous les classements de classes et de professeurs restent calculés avec la moyenne des temps.</p>
-      </div>
     </section>`;
   }
 
