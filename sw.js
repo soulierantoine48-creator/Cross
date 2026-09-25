@@ -1,4 +1,4 @@
-const CACHE = 'cross-college-v8';
+const CACHE = 'cross-college-v9';
 const LOCAL = ['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./bib-background.png'];
 const EXTERNAL = [
   'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js',
