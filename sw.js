@@ -1,5 +1,5 @@
-const CACHE = 'cross-college-v9';
-const LOCAL = ['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./bib-background.png'];
+const CACHE = 'cross-college-v10';
+const LOCAL = ['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./bib-v0.js','./bib-v1.js','./bib-v2.js','./bib-v3.js','./bib-v4.js','./bib-v5.js'];
 const EXTERNAL = [
   'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js',
   'https://cdn.jsdelivr.net/npm/jspdf@3.0.1/dist/jspdf.umd.min.js',
