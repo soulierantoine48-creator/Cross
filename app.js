@@ -2,7 +2,7 @@
   'use strict';
 
   const STORAGE_KEY = 'cross-college-state-v2';
-  const EMPTY = { students: [], races: [], arrivals: [], classTeachers: {}, crossDistanceM: 0, tab: 'students', notice: 'Scanner en attente', lastScan: '', resultRaceId: '' };
+  const EMPTY = { students: [], races: [], arrivals: [], classTeachers: {}, crossDistanceM: 0, scannerSeen: false, scannerLastAt: 0, tab: 'students', notice: 'Scanner en attente', lastScan: '', resultRaceId: '' };
   const DEMO = [
     [101,'DUPONT','Lina','6A','6e','F','Mme Martin'], [102,'MARTIN','Noé','6A','6e','M','Mme Martin'],
     [103,'BERNARD','Inès','6B','6e','F','M. Robert'], [104,'PETIT','Lucas','6B','6e','M','M. Robert'],
@@ -103,11 +103,12 @@
     const pending = state.students.filter(s => s.raceId && raceOf(s.raceId)?.startedAt && !raceOf(s.raceId)?.endedAt && s.elapsedMs == null).length;
     const done = state.students.filter(s => s.elapsedMs != null).length;
     return `<section class="timing-layout">
-      <div class="card timing-main"><div class="timing-title"><div><h2>Arrivées</h2><p>Scanne un dossard : le temps est enregistré immédiatement.</p></div><div class="live-dot">● SCANNER</div></div>
+      <div class="card timing-main"><div class="timing-title"><div><h2>Arrivées</h2><p>Scanne un dossard : le temps est enregistré immédiatement.</p></div><div class="live-dot ${state.scannerSeen?'ready':''}">${state.scannerSeen?'● SCANNER OPÉRATIONNEL':'○ SCANNER NON TESTÉ'}</div></div>
         <div class="big-notice">${esc(state.notice)}</div>
         <div class="timing-stats"><div><strong>${active.length}</strong><span>courses démarrées</span></div><div><strong>${pending}</strong><span>élèves encore en course</span></div><div><strong>${done}</strong><span>arrivées enregistrées</span></div></div>
         <div class="actions giant-actions"><button class="button warning" id="no-bib">SANS DOSSARD</button><button class="button" id="undo">Annuler la dernière arrivée</button><button class="button" id="test-scan">Tester le scanner</button></div>
-        <p class="hint">Dernier code reçu : <strong>${esc(state.lastScan || 'aucun')}</strong>. Le lecteur doit être jumelé en Bluetooth HID et envoyer Entrée après le code.</p>
+        <p class="hint">Dernier code reçu : <strong>${esc(state.lastScan || 'aucun')}</strong>${state.scannerLastAt ? ` · ${new Date(state.scannerLastAt).toLocaleTimeString('fr-FR')}` : ''}. Le lecteur doit être jumelé en Bluetooth HID et envoyer Entrée après le code.</p>
+        <div class="recent-arrivals"><h3>Dernières arrivées</h3>${state.arrivals.slice(-8).reverse().map(a=>{const s=state.students.find(x=>x.id===a.studentId);return s?`<div class="recent-arrival"><strong>#${s.bib} ${esc(nameOf(s))}</strong><span>${fmt(a.elapsedMs)} · ${esc(raceOf(a.raceId)?.name||'')}</span></div>`:'';}).join('') || '<p class="empty">Aucune arrivée enregistrée.</p>'}</div>
       </div>
       <div class="card"><h2>Courses actives</h2><div class="race-list">${active.length ? active.map(r => {
         const runners = state.students.filter(s => s.raceId === r.id), done = runners.filter(s => s.elapsedMs != null).length;
@@ -244,7 +245,7 @@
     state.notice=`${name} créée : ${runners.length} élèves`; save(); render();
   }
   function deleteRace(id) { const r=raceOf(id); if(!r || r.startedAt) return; if(!confirm(`Supprimer « ${r.name} » ?`)) return; state.students.forEach(s=>{if(s.raceId===id) delete s.raceId;}); state.races=state.races.filter(x=>x.id!==id); save(); render(); }
-  function startRace(id) { const r=raceOf(id); if(!r || r.startedAt) return; if(!confirm(`Lancer maintenant « ${r.name} » ?`)) return; r.startedAt=Date.now(); delete r.endedAt; state.notice=`${r.name} lancée`; state.tab='timing'; save(); render(); }
+  function startRace(id) { const r=raceOf(id); if(!r || r.startedAt) return; if(!state.crossDistanceM) { state.tab='races'; return notify('Renseigne la distance du cross avant de lancer une course'); } if(!confirm(`Lancer maintenant « ${r.name} » ?`)) return; r.startedAt=Date.now(); delete r.endedAt; state.notice=`${r.name} lancée`; state.tab='timing'; save(); render(); }
   function finishRace(id) { const r=raceOf(id); if(!r?.startedAt || r.endedAt) return; const runners=state.students.filter(s=>s.raceId===id), missing=runners.filter(s=>s.elapsedMs==null).length; if(!confirm(`Terminer « ${r.name} » maintenant ? ${missing} élève(s) sans arrivée resteront non classés/absents.`)) return; r.endedAt=Date.now(); state.notice=`${r.name} terminée · ${missing} absent(s)/non arrivé(s)`; save(); render(); }
   function reopenRace(id) { const r=raceOf(id); if(!r?.endedAt) return; if(!confirm(`Réouvrir « ${r.name} » pour accepter de nouvelles arrivées ?`)) return; delete r.endedAt; state.notice=`${r.name} réouverte`; save(); render(); }
   function saveClassTeachers(className) { const a=document.querySelector(`[data-teacher1="${CSS.escape(className)}"]`)?.value.trim()||''; const b=document.querySelector(`[data-teacher2="${CSS.escape(className)}"]`)?.value.trim()||''; const arr=[a,b].filter(Boolean).filter((v,i,x)=>x.indexOf(v)===i); state.classTeachers ||= {}; state.classTeachers[className]=arr; state.notice=`Professeurs enregistrés pour ${className}`; save(); render(); }
@@ -255,7 +256,7 @@
     const elapsedMs=Math.max(0,stamp-race.startedAt); student.finishedAt=stamp; student.elapsedMs=elapsedMs;
     state.arrivals.push({id:uid(),studentId:student.id,raceId:race.id,stamp,elapsedMs,method}); state.notice=`#${student.bib} ${nameOf(student)} — ${fmt(elapsedMs)}${state.crossDistanceM ? ` — ${fmtSpeed(student)}` : ''}`; save(); render();
   }
-  function scan(raw) { state.lastScan=raw; const m=String(raw).trim().match(/(\d+)/); if(!m) return notify(`Code non reconnu : ${raw}`); const bib=Number(m[1]); const s=state.students.find(x=>x.bib===bib); if(!s) return notify(`Dossard ${bib} inconnu`); finish(s,Date.now(),'scan'); }
+  function scan(raw) { state.scannerSeen=true; state.scannerLastAt=Date.now(); state.lastScan=raw; const m=String(raw).trim().match(/(\d+)/); if(!m) return notify(`Code non reconnu : ${raw}`); const bib=Number(m[1]); const s=state.students.find(x=>x.bib===bib); if(!s) return notify(`Dossard ${bib} inconnu`); finish(s,Date.now(),'scan'); }
   function manualFinish(id) { const s=state.students.find(x=>x.id===id); if(!s || manualStamp===null) return; const stamp=manualStamp; manualStamp=null; manualQuery=''; finish(s,stamp,'manual'); }
   function closeManual(){ manualStamp=null; manualQuery=''; render(); }
   function undoLast(){ const a=state.arrivals.at(-1); if(!a) return notify('Aucune arrivée à annuler'); const s=state.students.find(x=>x.id===a.studentId); if(s){delete s.finishedAt; delete s.elapsedMs; state.notice=`Arrivée annulée : #${s.bib} ${nameOf(s)}`;} state.arrivals.pop(); save(); render(); }
@@ -323,14 +324,33 @@
   }
 
   function exportBibs() {
-    if(!window.jspdf?.jsPDF || !window.JsBarcode) return notify('Module dossards indisponible. Recharge avec Internet.');
-    const {jsPDF}=window.jspdf, doc=new jsPDF({unit:'mm',format:'a4'}), cardW=95,cardH=138,mx=7.5,my=8;
-    state.students.forEach((s,i)=>{ if(i && i%4===0) doc.addPage(); const slot=i%4,col=slot%2,row=Math.floor(slot/2),x=mx+col*cardW,y=my+row*cardH;
-      doc.setDrawColor(190); doc.rect(x,y,cardW-2,cardH-2); doc.setFont('helvetica','bold'); doc.setFontSize(40); doc.text(String(s.bib),x+(cardW-2)/2,y+24,{align:'center'});
-      doc.setFontSize(12); doc.text(nameOf(s).slice(0,30),x+(cardW-2)/2,y+36,{align:'center'}); doc.setFontSize(11); doc.text(`${s.className} · ${s.sex}`,x+(cardW-2)/2,y+44,{align:'center'});
-      const canvas=document.createElement('canvas'); JsBarcode(canvas,String(s.bib),{format:'CODE128',displayValue:true,fontSize:18,height:70,margin:4,width:2}); doc.addImage(canvas.toDataURL('image/png'),'PNG',x+8,y+56,cardW-18,45);
-      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.text('Cross du collège',x+(cardW-2)/2,y+126,{align:'center'});
-    }); doc.save('dossards-cross.pdf');
+    if(!window.jspdf?.jsPDF || !window.JsBarcode || !window.QRCode) return notify('Module dossards indisponible. Recharge avec Internet.');
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({unit:'mm',format:'a4',orientation:'landscape'});
+    const W=297,H=210;
+    state.students.forEach((s,i)=>{
+      if(i) doc.addPage('a4','landscape');
+      doc.setDrawColor(15,23,42); doc.setLineWidth(.8); doc.rect(10,10,W-20,H-20);
+      doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.text('CROSS DU COLLÈGE',W/2,23,{align:'center'});
+      doc.setFontSize(76); doc.text(String(s.bib),W/2,72,{align:'center'});
+      doc.setFontSize(22); doc.text(nameOf(s).slice(0,34),W/2,88,{align:'center'});
+      doc.setFontSize(16); doc.text(`${s.className} · ${s.level} · ${s.sex}`,W/2,99,{align:'center'});
+
+      const barCanvas=document.createElement('canvas');
+      JsBarcode(barCanvas,String(s.bib),{format:'CODE128',displayValue:false,height:78,margin:8,width:2});
+      doc.addImage(barCanvas.toDataURL('image/png'),'PNG',26,113,155,42);
+      doc.setFontSize(18); doc.text(String(s.bib),103.5,164,{align:'center'});
+
+      const holder=document.createElement('div');
+      new QRCode(holder,{text:String(s.bib),width:256,height:256,correctLevel:QRCode.CorrectLevel.H});
+      const qrCanvas=holder.querySelector('canvas'), qrImg=holder.querySelector('img');
+      const qrData=qrCanvas ? qrCanvas.toDataURL('image/png') : qrImg?.src;
+      if(qrData) doc.addImage(qrData,'PNG',218,111,50,50);
+
+      doc.setFont('helvetica','normal'); doc.setFontSize(9);
+      doc.text('Code-barres principal · QR code de secours',W/2,185,{align:'center'});
+    });
+    doc.save('dossards-cross.pdf');
   }
 
   function downloadTemplate(){ downloadBlob('\uFEFFNom;Prénom;Classe;Niveau;Sexe;Enseignant;Dossard\nDUPONT;Lina;6A;6e;F;Mme Martin;1\nMARTIN;Noé;6A;6e;M;Mme Martin;2\n','modele-eleves-cross.csv','text/csv;charset=utf-8'); }
