@@ -323,97 +323,109 @@
     save(); render();
   }
 
-  function drawBibDecor(doc,W,H) {
-    doc.setDrawColor(0); doc.setFillColor(0);
-
-    // Bordure souvenir
-    doc.setLineWidth(.7);
-    doc.rect(9,9,W-18,H-18);
-
-    // Traits de vitesse à gauche
-    doc.setLineWidth(2.2);
-    [[15,46,42,38],[14,58,48,47],[14,72,39,66],[16,166,50,176],[16,178,45,188]].forEach(a=>doc.line(...a));
-
-    // Silhouette de coureur stylisée à gauche
-    doc.circle(38,108,4,'F');
-    doc.setLineWidth(5); doc.line(40,112,50,126);
-    doc.setLineWidth(3.2); doc.line(47,119,60,113); doc.line(47,121,35,128);
-    doc.line(50,126,62,139); doc.line(50,126,43,142);
-
-    // Arches inspirées des arènes de Nîmes à droite
-    doc.setLineWidth(1.5);
-    for(let i=0;i<5;i++){
-      const x=232+i*10;
-      doc.line(x,113,x,142);
-      doc.line(x+7,113,x+7,142);
-      doc.ellipse(x+3.5,113,3.5,6,'S');
+  function fitPdfText(doc,text,maxWidth,maxSize,minSize,font='helvetica',style='bold') {
+    doc.setFont(font,style);
+    let size=maxSize;
+    while(size>minSize){
+      doc.setFontSize(size);
+      if(doc.getTextWidth(text)<=maxWidth) return size;
+      size-=1;
     }
-    doc.line(228,142,281,142);
-    doc.line(231,148,278,148);
-
-    // Petites éclaboussures / points, loin des zones de scan
-    [[22,27,1.2],[29,33,.8],[267,29,1],[275,36,.7],[25,154,.8],[273,158,1.1],[65,28,.6],[222,31,.7]].forEach(([x,y,r])=>doc.circle(x,y,r,'F'));
+    doc.setFontSize(minSize);
+    return minSize;
   }
 
-  function exportBibs() {
+  function loadBibBackground() {
+    return new Promise((resolve,reject)=>{
+      const img=new Image();
+      img.onload=()=>resolve(img);
+      img.onerror=()=>reject(new Error('Fond du dossard indisponible'));
+      img.src='./bib-background.png';
+    });
+  }
+
+  function drawStudentName(doc,s,centerX) {
+    const first=String(s.firstName||'').trim();
+    const last=String(s.lastName||'').trim().toUpperCase();
+    const full=`${first} ${last}`.trim();
+    const maxWidth=112;
+    const oneLineSize=fitPdfText(doc,full,maxWidth,28,18);
+
+    if(doc.getTextWidth(full)<=maxWidth){
+      doc.text(full,centerX,143,{align:'center'});
+      return 153;
+    }
+
+    const firstSize=fitPdfText(doc,first,maxWidth,22,16);
+    doc.setFontSize(firstSize);
+    doc.text(first,centerX,139,{align:'center'});
+
+    const lastSize=fitPdfText(doc,last,maxWidth,24,15);
+    doc.setFontSize(lastSize);
+    doc.text(last,centerX,148,{align:'center'});
+    return 157;
+  }
+
+  async function exportBibs() {
     if(!window.jspdf?.jsPDF || !window.JsBarcode || !window.QRCode) return notify('Module dossards indisponible. Recharge avec Internet.');
+
+    let background;
+    try { background=await loadBibBackground(); }
+    catch(e){ return notify(e.message || 'Fond du dossard indisponible'); }
+
     const {jsPDF}=window.jspdf;
     const doc=new jsPDF({unit:'mm',format:'a4',orientation:'landscape'});
-    const W=297,H=210;
+    const W=297,H=210,centerX=W/2;
 
     state.students.forEach((s,i)=>{
       if(i) doc.addPage('a4','landscape');
 
-      drawBibDecor(doc,W,H);
+      // Fond graphique fixe validé
+      doc.addImage(background,'PNG',0,0,W,H);
 
-      // En-tête
-      doc.setTextColor(0);
-      doc.setFont('helvetica','bold');
-      doc.setFontSize(24);
-      doc.text('COLLÈGE ADA LOVELACE',W/2,23,{align:'center'});
-      doc.setFontSize(14);
-      doc.text('NÎMES',W/2,31,{align:'center'});
-      doc.setFontSize(12);
-      doc.text('2026',W/2,37,{align:'center'});
-
-      // Zone blanche et Code 128 centré en haut
-      doc.setFillColor(255); doc.rect(82,40,133,31,'F');
+      // Code 128 : centré en haut, avec marge blanche de sécurité
+      doc.setFillColor(255,255,255);
+      doc.rect(91,48,115,25,'F');
       const barCanvas=document.createElement('canvas');
       JsBarcode(barCanvas,String(s.bib),{
         format:'CODE128',
         displayValue:false,
-        height:82,
-        margin:12,
-        width:2.2,
+        height:90,
+        margin:14,
+        width:2.5,
         background:'#ffffff',
         lineColor:'#000000'
       });
-      doc.addImage(barCanvas.toDataURL('image/png'),'PNG',91,44,115,22);
+      doc.addImage(barCanvas.toDataURL('image/png'),'PNG',98,52,101,17);
 
-      // Numéro central
+      // Numéro : très dominant mais toujours contenu dans 112 mm
+      const bib=String(s.bib);
+      const bibSize=fitPdfText(doc,bib,112,116,78);
       doc.setFont('helvetica','bold');
-      doc.setFontSize(88);
-      doc.text(String(s.bib),W/2,126,{align:'center'});
+      doc.setFontSize(bibSize);
+      doc.text(bib,centerX,125,{align:'center'});
 
-      // Identité souvenir
-      const displayName=`${s.firstName || ''} ${String(s.lastName || '').toUpperCase()}`.trim();
-      doc.setFontSize(displayName.length>24 ? 19 : 24);
-      doc.text(displayName.slice(0,38),W/2,143,{align:'center'});
-      doc.setFont('helvetica','normal');
+      // Nom/prénom adaptatif : 1 ligne si possible, sinon 2 lignes
+      const classY=drawStudentName(doc,s,centerX);
+
+      // Classe discrète
+      doc.setFont('helvetica','bold');
       doc.setFontSize(11);
-      doc.text(String(s.className || ''),W/2,151,{align:'center'});
+      doc.text(String(s.className||''),centerX,classY,{align:'center'});
 
-      // Zone blanche et QR centré en bas
-      doc.setFillColor(255); doc.rect(126,154,45,45,'F');
+      // QR de secours : 36 mm, centré en bas, avec quiet zone
+      doc.setFillColor(255,255,255);
+      doc.rect(127.5,159,42,42,'F');
       const holder=document.createElement('div');
-      new QRCode(holder,{text:String(s.bib),width:256,height:256,correctLevel:QRCode.CorrectLevel.H});
+      new QRCode(holder,{
+        text:String(s.bib),
+        width:256,
+        height:256,
+        correctLevel:QRCode.CorrectLevel.H
+      });
       const qrCanvas=holder.querySelector('canvas'), qrImg=holder.querySelector('img');
       const qrData=qrCanvas ? qrCanvas.toDataURL('image/png') : qrImg?.src;
-      if(qrData) doc.addImage(qrData,'PNG',129,157,39,39);
-
-      // Filet graphique discret, sans texte technique
-      doc.setDrawColor(0); doc.setLineWidth(.8);
-      doc.line(92,149,121,149); doc.line(176,149,205,149);
+      if(qrData) doc.addImage(qrData,'PNG',130.5,162,36,36);
     });
 
     doc.save('dossards-cross-ada-lovelace-2026.pdf');
