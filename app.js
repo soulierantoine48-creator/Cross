@@ -348,19 +348,19 @@
     const first=String(s.firstName||'').trim();
     const last=String(s.lastName||'').trim().toUpperCase();
     const full=`${first} ${last}`.trim();
-    const maxWidth=112;
-    const oneLineSize=fitPdfText(doc,full,maxWidth,28,18);
+    const maxWidth=108;
+    const oneLineSize=fitPdfText(doc,full,maxWidth,29,17);
 
     if(doc.getTextWidth(full)<=maxWidth){
       doc.text(full,centerX,143,{align:'center'});
       return 153;
     }
 
-    const firstSize=fitPdfText(doc,first,maxWidth,22,16);
+    const firstSize=fitPdfText(doc,first,maxWidth,23,13);
     doc.setFontSize(firstSize);
     doc.text(first,centerX,139,{align:'center'});
 
-    const lastSize=fitPdfText(doc,last,maxWidth,24,15);
+    const lastSize=fitPdfText(doc,last,maxWidth,25,12);
     doc.setFontSize(lastSize);
     doc.text(last,centerX,148,{align:'center'});
     return 157;
@@ -398,9 +398,9 @@
       });
       doc.addImage(barCanvas.toDataURL('image/png'),'PNG',98,52,101,17);
 
-      // Numéro : très dominant mais toujours contenu dans 112 mm
+      // Numéro : très dominant mais toujours contenu dans la zone centrale
       const bib=String(s.bib);
-      const bibSize=fitPdfText(doc,bib,112,116,78);
+      const bibSize=fitPdfText(doc,bib,106,120,76);
       doc.setFont('helvetica','bold');
       doc.setFontSize(bibSize);
       doc.text(bib,centerX,125,{align:'center'});
