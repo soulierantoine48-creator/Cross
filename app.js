@@ -323,34 +323,100 @@
     save(); render();
   }
 
+  function drawBibDecor(doc,W,H) {
+    doc.setDrawColor(0); doc.setFillColor(0);
+
+    // Bordure souvenir
+    doc.setLineWidth(.7);
+    doc.rect(9,9,W-18,H-18);
+
+    // Traits de vitesse à gauche
+    doc.setLineWidth(2.2);
+    [[15,46,42,38],[14,58,48,47],[14,72,39,66],[16,166,50,176],[16,178,45,188]].forEach(a=>doc.line(...a));
+
+    // Silhouette de coureur stylisée à gauche
+    doc.circle(38,108,4,'F');
+    doc.setLineWidth(5); doc.line(40,112,50,126);
+    doc.setLineWidth(3.2); doc.line(47,119,60,113); doc.line(47,121,35,128);
+    doc.line(50,126,62,139); doc.line(50,126,43,142);
+
+    // Arches inspirées des arènes de Nîmes à droite
+    doc.setLineWidth(1.5);
+    for(let i=0;i<5;i++){
+      const x=232+i*10;
+      doc.line(x,113,x,142);
+      doc.line(x+7,113,x+7,142);
+      doc.ellipse(x+3.5,113,3.5,6,'S');
+    }
+    doc.line(228,142,281,142);
+    doc.line(231,148,278,148);
+
+    // Petites éclaboussures / points, loin des zones de scan
+    [[22,27,1.2],[29,33,.8],[267,29,1],[275,36,.7],[25,154,.8],[273,158,1.1],[65,28,.6],[222,31,.7]].forEach(([x,y,r])=>doc.circle(x,y,r,'F'));
+  }
+
   function exportBibs() {
     if(!window.jspdf?.jsPDF || !window.JsBarcode || !window.QRCode) return notify('Module dossards indisponible. Recharge avec Internet.');
     const {jsPDF}=window.jspdf;
     const doc=new jsPDF({unit:'mm',format:'a4',orientation:'landscape'});
     const W=297,H=210;
+
     state.students.forEach((s,i)=>{
       if(i) doc.addPage('a4','landscape');
-      doc.setDrawColor(15,23,42); doc.setLineWidth(.8); doc.rect(10,10,W-20,H-20);
-      doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.text('CROSS DU COLLÈGE',W/2,23,{align:'center'});
-      doc.setFontSize(76); doc.text(String(s.bib),W/2,72,{align:'center'});
-      doc.setFontSize(22); doc.text(nameOf(s).slice(0,34),W/2,88,{align:'center'});
-      doc.setFontSize(16); doc.text(`${s.className} · ${s.level} · ${s.sex}`,W/2,99,{align:'center'});
 
+      drawBibDecor(doc,W,H);
+
+      // En-tête
+      doc.setTextColor(0);
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(24);
+      doc.text('COLLÈGE ADA LOVELACE',W/2,23,{align:'center'});
+      doc.setFontSize(14);
+      doc.text('NÎMES',W/2,31,{align:'center'});
+      doc.setFontSize(12);
+      doc.text('2026',W/2,37,{align:'center'});
+
+      // Zone blanche et Code 128 centré en haut
+      doc.setFillColor(255); doc.rect(82,40,133,31,'F');
       const barCanvas=document.createElement('canvas');
-      JsBarcode(barCanvas,String(s.bib),{format:'CODE128',displayValue:false,height:78,margin:8,width:2});
-      doc.addImage(barCanvas.toDataURL('image/png'),'PNG',26,113,155,42);
-      doc.setFontSize(18); doc.text(String(s.bib),103.5,164,{align:'center'});
+      JsBarcode(barCanvas,String(s.bib),{
+        format:'CODE128',
+        displayValue:false,
+        height:82,
+        margin:12,
+        width:2.2,
+        background:'#ffffff',
+        lineColor:'#000000'
+      });
+      doc.addImage(barCanvas.toDataURL('image/png'),'PNG',91,44,115,22);
 
+      // Numéro central
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(88);
+      doc.text(String(s.bib),W/2,126,{align:'center'});
+
+      // Identité souvenir
+      const displayName=`${s.firstName || ''} ${String(s.lastName || '').toUpperCase()}`.trim();
+      doc.setFontSize(displayName.length>24 ? 19 : 24);
+      doc.text(displayName.slice(0,38),W/2,143,{align:'center'});
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(11);
+      doc.text(String(s.className || ''),W/2,151,{align:'center'});
+
+      // Zone blanche et QR centré en bas
+      doc.setFillColor(255); doc.rect(126,154,45,45,'F');
       const holder=document.createElement('div');
       new QRCode(holder,{text:String(s.bib),width:256,height:256,correctLevel:QRCode.CorrectLevel.H});
       const qrCanvas=holder.querySelector('canvas'), qrImg=holder.querySelector('img');
       const qrData=qrCanvas ? qrCanvas.toDataURL('image/png') : qrImg?.src;
-      if(qrData) doc.addImage(qrData,'PNG',218,111,50,50);
+      if(qrData) doc.addImage(qrData,'PNG',129,157,39,39);
 
-      doc.setFont('helvetica','normal'); doc.setFontSize(9);
-      doc.text('Code-barres principal · QR code de secours',W/2,185,{align:'center'});
+      // Filet graphique discret, sans texte technique
+      doc.setDrawColor(0); doc.setLineWidth(.8);
+      doc.line(92,149,121,149); doc.line(176,149,205,149);
     });
-    doc.save('dossards-cross.pdf');
+
+    doc.save('dossards-cross-ada-lovelace-2026.pdf');
   }
 
   function downloadTemplate(){ downloadBlob('\uFEFFNom;Prénom;Classe;Niveau;Sexe;Enseignant;Dossard\nDUPONT;Lina;6A;6e;F;Mme Martin;1\nMARTIN;Noé;6A;6e;M;Mme Martin;2\n','modele-eleves-cross.csv','text/csv;charset=utf-8'); }
