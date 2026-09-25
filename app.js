@@ -395,7 +395,7 @@
       if(i) doc.addPage('a4','landscape');
 
       // Fond graphique fixe validé
-      doc.addImage(background,'PNG',0,0,W,H);
+      doc.addImage(background,'PNG',0,0,W,H,undefined,'NONE');
 
       // Code 128 : zone blanche large, centrée et protégée de la décoration.
       doc.setFillColor(255,255,255);
