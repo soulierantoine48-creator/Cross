@@ -659,7 +659,16 @@
     } else {
       const s=state.students.find(x=>x.id===studentEditorId);
       if(!s) return;
-      Object.assign(s,{lastName,firstName,className,level:levelOf(className,''),sex,bib});
+      const oldLevel=s.level, oldSex=s.sex;
+      const newLevel=levelOf(className,'');
+      const currentRace=raceOf(s.raceId);
+      if(currentRace?.startedAt && (oldLevel!==newLevel || oldSex!==sex)) return notify('Impossible de changer le niveau ou le sexe après le départ de sa course.','error');
+      Object.assign(s,{lastName,firstName,className,level:newLevel,sex,bib});
+      if(currentRace && !currentRace.startedAt && (oldLevel!==newLevel || oldSex!==sex)){
+        delete s.raceId;
+        const matching=matchingRaceFor(newLevel,sex);
+        if(matching) s.raceId=matching.id;
+      }
       state.notice=`${lastName.toUpperCase()} ${firstName} modifié`;
     }
     if(studentEditorId!=='new') state.noticeKind='good';
@@ -1231,13 +1240,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v26')){
-          sessionStorage.setItem('cross-browser-clean-v26','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v27')){
+          sessionStorage.setItem('cross-browser-clean-v27','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=26',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=27',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
