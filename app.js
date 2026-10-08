@@ -827,9 +827,20 @@
     state.scannerLastAt=Date.now();
     state.lastScan=raw;
     const m=String(raw).trim().match(/(\d+)/);
-    if(!m) return notify(`CODE NON RECONNU · ${raw}`,'error');
+    if(!m){
+      if(scannerTestMode) scannerTestMode=false;
+      return notify(`CODE NON RECONNU · ${raw}`,'error');
+    }
     const bib=Number(m[1]);
     const s=state.students.find(x=>x.bib===bib);
+    if(scannerTestMode){
+      scannerTestMode=false;
+      if(!s) return notify(`SCANNER OK · code ${bib} lu mais dossard inconnu`,'warning');
+      state.notice=`SCANNER OK · #${bib} ${nameOf(s)} reconnu · aucun chrono enregistré`;
+      state.noticeKind='good';
+      save(); render();
+      return;
+    }
     if(!s) return notify(`DOSSARD ${bib} INCONNU`,'error');
     finish(s,Date.now(),'scan');
   }
