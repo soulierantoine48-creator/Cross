@@ -29,6 +29,7 @@
   let openClass = '';
   let studentEditorId = null;
   let studentSearch = '';
+  let bibClassPickerOpen = false;
   let syncStatus = navigator.onLine ? 'pending' : 'offline';
   let syncPending = true;
   let syncTimer = null;
@@ -192,6 +193,7 @@
       ${finishConfirmRaceId ? finishRaceModal() : ''}
       ${resultEditStudentId ? resultEditModal() : ''}
       ${deleteFinishedRaceId ? deleteFinishedRaceModal() : ''}
+      ${bibClassPickerOpen ? bibClassPickerModal() : ''}
     </div>`;
     bind();
     updateSyncBadge();
@@ -213,7 +215,7 @@
         <div><span class="eyebrow">PRÉPARATION</span><h2>Élèves & dossards</h2><p>Importe la liste, contrôle les données puis ouvre chaque classe pour les ajustements.</p></div>
         <div class="actions">
           <label class="button primary file-button ${anyRaceStarted()?'disabled':''}" title="${anyRaceStarted()?'Import verrouillé après le premier départ':''}">${anyRaceStarted()?'Import verrouillé':'Importer Excel'}<input id="student-file" type="file" accept=".xlsx,.xls,.csv" ${anyRaceStarted()?'disabled':''}></label>
-          <button class="button" id="bibs" ${state.students.length?'':'disabled'}>Créer les dossards PDF</button>
+          <button class="button" id="bibs" ${state.students.length?'':'disabled'}>Dossards par classe</button>
           <button class="button subtle" id="backup">Sauvegarde de secours</button>
           <label class="button subtle file-button">Restaurer<input id="backup-file" type="file" accept=".json,application/json"></label>
         </div>
@@ -365,8 +367,19 @@
         <div class="teacher-options">${EPS_TEACHERS.map(name=>`<button class="teacher-choice ${teacher===name?'selected':''}" data-class-teacher-name="${esc(name)}">${esc(name)}</button>`).join('')}</div>
         ${teacher?`<button class="teacher-clear" id="clear-class-teacher">Retirer l’attribution</button>`:''}
       </div>
-      <div class="class-actions"><button class="button primary" id="add-student">+ Ajouter un élève</button></div>
+      <div class="class-actions"><button class="button" data-export-bibs-class="${esc(cls)}">PDF des dossards</button><button class="button primary" id="add-student">+ Ajouter un élève</button></div>
       <div class="class-students">${x.students.sort((a,b)=>nameOf(a).localeCompare(nameOf(b),'fr')).map(s=>`<button data-edit-student="${s.id}"><span class="student-bib">#${esc(s.bib||'—')}</span><strong>${esc(nameOf(s))}</strong><span>${s.sex==='F'?'Fille':s.sex==='M'?'Garçon':'Sexe ?'}</span><small>Modifier</small></button>`).join('')}</div>
+    </div></div>`;
+  }
+
+  function bibClassPickerModal() {
+    const classes=classNames();
+    return `<div class="modal-backdrop"><div class="modal bib-class-modal">
+      <div class="modal-head"><div><span class="eyebrow">DOSSARDS PDF</span><h2>Choisir une classe</h2><p>Un PDF séparé par classe, en qualité maximale.</p></div><button class="close" id="close-bib-class-picker">×</button></div>
+      <div class="bib-class-grid">${classes.map(cls=>{
+        const x=classStats(cls);
+        return `<button class="bib-class-choice ${levelTone(x.level)}" data-export-bibs-class="${esc(cls)}"><span>${esc(x.level)}</span><strong>${esc(cls)}</strong><small>${x.total} élèves</small></button>`;
+      }).join('')}</div>
     </div></div>`;
   }
 
@@ -463,7 +476,9 @@
     if(document.querySelector('[data-race-clock]')) raceClockTimer=setInterval(updateRaceClocks,1000);
     document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;save();render();});
     $('#student-file')?.addEventListener('change',e=>importStudents(e.target.files?.[0]));
-    $('#bibs')?.addEventListener('click',exportBibs);
+    $('#bibs')?.addEventListener('click',()=>{bibClassPickerOpen=true;render();});
+    $('#close-bib-class-picker')?.addEventListener('click',()=>{bibClassPickerOpen=false;render();});
+    document.querySelectorAll('[data-export-bibs-class]').forEach(b=>b.onclick=()=>exportBibs(b.dataset.exportBibsClass,b));
     $('#backup')?.addEventListener('click',exportBackup);
     $('#backup-file')?.addEventListener('change',e=>restoreBackup(e.target.files?.[0]));
     $('#student-search')?.addEventListener('input',e=>{studentSearch=e.target.value;render();setTimeout(()=>{const x=$('#student-search');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}},0);});
@@ -1100,21 +1115,20 @@
     return 159;
   }
 
-  async function preflightBibs() {
+  async function preflightBibs(students) {
     const issues=bibIssues();
     if(issues.length) throw new Error(`Impossible de créer les dossards : ${issues.length} anomalie(s). ${issues[0]}`);
     if(!window.JsBarcode || !window.QRCode) throw new Error('Modules QR / Code 128 indisponibles.');
-    if(!state.students.length) throw new Error('Aucun élève à imprimer.');
+    if(!students?.length) throw new Error('Aucun élève dans cette classe.');
 
-    // Tester quelques valeurs suffit : tous les dossards sont numériques et ont déjà été validés.
-    const checks=[state.students[0],state.students[Math.floor(state.students.length/2)],state.students.at(-1)].filter(Boolean);
+    const checks=[students[0],students[Math.floor(students.length/2)],students.at(-1)].filter(Boolean);
     for(const s of checks){
       const value=String(s.bib);
       const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
       JsBarcode(svg,value,{format:'CODE128',displayValue:false,height:40,margin:8,width:2});
       if(svg.querySelectorAll('rect').length<2) throw new Error(`Code 128 invalide pour le dossard ${value}`);
       const holder=document.createElement('div');
-      new QRCode(holder,{text:value,width:160,height:160,correctLevel:QRCode.CorrectLevel.H});
+      new QRCode(holder,{text:value,width:256,height:256,correctLevel:QRCode.CorrectLevel.H});
       const q=holder.querySelector('canvas')||holder.querySelector('img');
       if(!q) throw new Error(`QR invalide pour le dossard ${value}`);
       if(q.tagName==='CANVAS'){ q.width=1; q.height=1; }
@@ -1123,37 +1137,32 @@
     return true;
   }
 
-  async function exportBibs() {
+  async function exportBibs(className, triggerButton=null) {
     if(!window.jspdf?.jsPDF || !window.JsBarcode || !window.QRCode) return notify('Module dossards indisponible. Recharge avec Internet.','error');
-    const button=document.getElementById('bibs');
-    const originalLabel=button?.textContent||'Créer les dossards PDF';
-    if(button){ button.disabled=true; button.textContent='Préparation du PDF…'; }
+    const students=state.students.filter(s=>s.className===className);
+    if(!students.length) return notify(`Aucun élève dans ${className}.`,'warning');
+
+    const button=triggerButton instanceof HTMLElement ? triggerButton : null;
+    const originalLabel=button?.textContent||'PDF';
+    if(button){ button.disabled=true; button.textContent='Préparation…'; }
 
     try {
-      await preflightBibs();
+      await preflightBibs(students);
 
       let backgroundData;
       try { backgroundData=buildBibBackgroundData(); }
       catch(e){ throw new Error(e.message || 'Fond haute définition du dossard indisponible'); }
 
+      // Qualité maximale identique à l'ancienne génération.
       const {jsPDF}=window.jspdf;
-      const doc=new jsPDF({
-        unit:'mm',
-        format:'a4',
-        orientation:'landscape',
-        compress:true,
-        putOnlyUsedFonts:true
-      });
-      const W=297,H=210,centerX=W/2,total=state.students.length;
+      const doc=new jsPDF({unit:'mm',format:'a4',orientation:'landscape'});
+      const W=297,H=210,centerX=W/2,total=students.length;
 
       for(let i=0;i<total;i++){
-        const s=state.students[i];
+        const s=students[i];
         if(i) doc.addPage('a4','landscape');
 
-        // Le fond est référencé une seule fois dans le PDF grâce à l'alias.
         doc.addImage(backgroundData,'PNG',0,0,W,H,'bibBackgroundHD','FAST');
-
-        // Code 128 entièrement vectoriel.
         drawVectorBarcode(doc,String(s.bib),98,58,101,17);
 
         const bib=String(s.bib);
@@ -1167,42 +1176,43 @@
         doc.setFontSize(11.5);
         doc.text(String(s.className||''),centerX,classY,{align:'center'});
 
-        // 320 px sur 37 mm = ~220 dpi : très largement suffisant pour un QR imprimé,
-        // tout en utilisant ~10x moins de mémoire qu'un canvas 1024 px.
+        // QR haute définition 1024 × 1024, comme avant.
         doc.setFillColor(255,255,255);
         doc.rect(126,160,45,44,'F');
         const holder=document.createElement('div');
         new QRCode(holder,{
           text:String(s.bib),
-          width:320,
-          height:320,
+          width:1024,
+          height:1024,
           correctLevel:QRCode.CorrectLevel.H
         });
         const qrCanvas=holder.querySelector('canvas'), qrImg=holder.querySelector('img');
         const qrData=qrCanvas ? qrCanvas.toDataURL('image/png') : qrImg?.src;
-        if(qrData) doc.addImage(qrData,'PNG',130,164,37,37,undefined,'FAST');
+        if(qrData) doc.addImage(qrData,'PNG',130,164,37,37,undefined,'NONE');
 
-        // Safari iPad a besoin qu'on lui rende la main pour libérer les canvases précédents.
         if(qrCanvas){ qrCanvas.width=1; qrCanvas.height=1; }
-        if(i%8===7 || i===total-1){
-          if(button) button.textContent=`PDF · ${i+1}/${total}`;
+        if(i%4===3 || i===total-1){
+          if(button) button.textContent=`${i+1}/${total}`;
           await new Promise(resolve=>requestAnimationFrame(resolve));
         }
       }
 
-      if(button) button.textContent='Finalisation du PDF…';
+      if(button) button.textContent='Finalisation…';
       await new Promise(resolve=>setTimeout(resolve,0));
-      doc.save('dossards-cross-ada-lovelace-2026.pdf');
 
-      state.notice=`${total}/${total} dossards contrôlés et générés`;
+      const safeClass=String(className).replace(/[^a-zA-Z0-9_-]/g,'-');
+      doc.save(`dossards-${safeClass}-cross-ada-lovelace-2026.pdf`);
+
+      state.notice=`${className} · ${total} dossards générés en qualité maximale`;
       state.noticeKind='good';
+      bibClassPickerOpen=false;
       save();
       render();
     } catch(e) {
       notify(e.message || 'Création du PDF impossible','error');
     } finally {
-      const b=document.getElementById('bibs');
-      if(b){ b.disabled=false; b.textContent=originalLabel; }
+      const b=button;
+      if(b && document.body.contains(b)){ b.disabled=false; b.textContent=originalLabel; }
     }
   }
 
@@ -1271,13 +1281,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v29')){
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v30')){
           sessionStorage.setItem('cross-browser-clean-v27','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=29',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=30',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
