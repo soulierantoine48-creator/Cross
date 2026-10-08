@@ -1207,13 +1207,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v25')){
-          sessionStorage.setItem('cross-browser-clean-v25','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v26')){
+          sessionStorage.setItem('cross-browser-clean-v26','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=25',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=26',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
