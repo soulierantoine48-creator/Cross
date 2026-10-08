@@ -464,6 +464,7 @@
     $('#student-file')?.addEventListener('change',e=>importStudents(e.target.files?.[0]));
     $('#bibs')?.addEventListener('click',exportBibs);
     $('#backup')?.addEventListener('click',exportBackup);
+    $('#backup-file')?.addEventListener('change',e=>restoreBackup(e.target.files?.[0]));
     $('#student-search')?.addEventListener('input',e=>{studentSearch=e.target.value;render();setTimeout(()=>{const x=$('#student-search');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}},0);});
     document.querySelectorAll('[data-open-class]').forEach(b=>b.onclick=()=>{openClass=b.dataset.openClass;render();});
     $('#close-class')?.addEventListener('click',()=>{openClass='';render();});
@@ -511,7 +512,12 @@
     });
     document.querySelectorAll('[data-manual]').forEach(b=>b.onclick=()=>manualFinish(b.dataset.manual));
     $('#undo')?.addEventListener('click',undoLast);
-    $('#test-scan')?.addEventListener('click',()=>notify('Mode test : scanne un dossard maintenant.','info'));
+    $('#test-scan')?.addEventListener('click',()=>{
+      scannerTestMode=true;
+      state.notice='TEST SCANNER · scanne un dossard · aucun chrono ne sera enregistré';
+      state.noticeKind='info';
+      save(); render();
+    });
 
     document.querySelectorAll('[data-result-mode]').forEach(b=>b.onclick=()=>{state.resultMode=b.dataset.resultMode;save();render();});
     $('#export-all-results')?.addEventListener('click',exportResultsPdf);
