@@ -1143,7 +1143,25 @@
   }
 
   function downloadTemplate(){ downloadBlob('\uFEFFNom;Prénom;Classe;Niveau;Sexe;Enseignant;Dossard\nDUPONT;Lina;6A;6e;F;Mme Martin;1\nMARTIN;Noé;6A;6e;M;Mme Martin;2\n','modele-eleves-cross.csv','text/csv;charset=utf-8'); }
-  function exportBackup(){ downloadBlob(JSON.stringify(state,null,2),'sauvegarde-cross.json','application/json'); }
+  function exportBackup(){
+    const payload={format:'cross-ada-lovelace-backup-v1',exportedAt:new Date().toISOString(),state};
+    downloadBlob(JSON.stringify(payload,null,2),'sauvegarde-cross.json','application/json');
+  }
+
+  async function restoreBackup(file){
+    if(!file) return;
+    try{
+      const parsed=JSON.parse(await file.text());
+      const restored=parsed?.state ?? parsed;
+      if(!restored || !Array.isArray(restored.students) || !Array.isArray(restored.races) || !Array.isArray(restored.arrivals)) throw new Error('Fichier de sauvegarde invalide.');
+      if((state.students.length||state.races.length||state.arrivals.length) && !confirm('Restaurer cette sauvegarde ? Les données actuellement présentes sur cet iPad seront remplacées.')) return;
+      state={...EMPTY,...restored};
+      openClass=''; studentEditorId=null; manualStamp=null; resultEditStudentId=''; deleteFinishedRaceId='';
+      state.notice=`Sauvegarde restaurée · ${state.students.length} élèves · ${state.races.length} courses`;
+      state.noticeKind='good';
+      save(); render();
+    }catch(e){ notify(e.message||'Restauration impossible','error'); }
+  }
   function downloadBlob(content,name,type){ const blob=new Blob([content],{type}), a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 
   document.addEventListener('keydown', e => {
