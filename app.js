@@ -492,6 +492,7 @@
     document.querySelectorAll('[data-arm-race]').forEach(b=>b.onclick=()=>{armedRaceId=b.dataset.armRace;render();});
     $('#cancel-armed')?.addEventListener('click',()=>{armedRaceId='';render();});
     $('#launch-armed')?.addEventListener('click',()=>{if(armedRaceId) startRace(armedRaceId);});
+    document.querySelectorAll('[data-reset-start]').forEach(b=>b.onclick=()=>resetRaceStart(b.dataset.resetStart));
     document.querySelectorAll('[data-finish-race]').forEach(b=>b.onclick=()=>{finishConfirmRaceId=b.dataset.finishRace;render();});
     $('#close-finish-modal')?.addEventListener('click',()=>{finishConfirmRaceId='';render();});
     $('#cancel-finish-race')?.addEventListener('click',()=>{finishConfirmRaceId='';render();});
@@ -700,6 +701,19 @@
     state.notice=`${r.name} · DÉPART enregistré à ${new Date(r.startedAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
     state.noticeKind='good';
     state.tab='timing';
+    save(); render();
+  }
+
+  function resetRaceStart(id) {
+    const r=raceOf(id);
+    if(!r?.startedAt || r.endedAt) return;
+    const arrived=state.students.filter(s=>s.raceId===id&&s.elapsedMs!=null).length;
+    if(arrived) return notify('Impossible d’annuler le départ après une première arrivée.','error');
+    if(!confirm(`Annuler le départ de « ${r.name} » ? La course reviendra dans les courses à préparer.`)) return;
+    delete r.startedAt;
+    delete r.endedAt;
+    state.notice=`Départ annulé · ${r.name} est de nouveau prête à être lancée`;
+    state.noticeKind='warning';
     save(); render();
   }
 
