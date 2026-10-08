@@ -2,7 +2,7 @@
   'use strict';
 
   const STORAGE_KEY = 'cross-college-state-v2';
-  const EMPTY = { students: [], races: [], arrivals: [], classTeachers: {}, crossDistanceM: 0, scannerSeen: false, scannerLastAt: 0, tab: 'students', notice: 'Prêt', noticeKind: 'info', lastScan: '', resultRaceId: '', resultMode: 'courses' };
+  const EMPTY = { students: [], races: [], arrivals: [], classTeachers: {}, crossDistanceM: 0, scannerSeen: false, scannerLastAt: 0, tab: 'students', notice: 'Prêt', noticeKind: 'info', lastScan: '', resultRaceId: '', resultMode: 'courses', manualPending: [] };
   const EPS_TEACHERS = ['Libourel','Soulier','Sabardeil','Ichou','Gourdon'];
   const DEMO = [
     [101,'DUPONT','Lina','6A','6e','F','Mme Martin'], [102,'MARTIN','Noé','6A','6e','M','Mme Martin'],
@@ -16,7 +16,7 @@
   let state = load();
   const BAD_IMPORT_FIX_KEY = 'cross-bad-bib-import-cleared-v1';
   clearBrokenBibImportOnce();
-  let manualStamp = null;
+  let manualStamp = Array.isArray(state.manualPending) && state.manualPending.length ? state.manualPending[0] : null;
   let manualQuery = '';
   let scanBuffer = '';
   let scanLastKey = 0;
