@@ -166,141 +166,215 @@
   }
 
   function studentsPage() {
-    return `<section class="page-grid">
-      <div class="card span-2"><div class="card-head"><div><h2>Liste des élèves</h2><p>Importe un fichier Excel, XLSX ou CSV.</p></div><strong>${state.students.length} élèves</strong></div>
+    const issues=bibIssues();
+    const q=studentSearch.trim().toLowerCase();
+    const matches=q ? state.students.filter(s => nameOf(s).toLowerCase().includes(q) || String(s.className).toLowerCase().includes(q) || String(s.bib||'').includes(q)).slice(0,40) : [];
+    return `<section class="prep-page">
+      <div class="hero-card">
+        <div><span class="eyebrow">PRÉPARATION</span><h2>Élèves & dossards</h2><p>Importe la liste, contrôle les données puis ouvre chaque classe pour les ajustements.</p></div>
         <div class="actions">
-          <label class="button primary file-button">Importer Excel / CSV<input id="student-file" type="file" accept=".xlsx,.xls,.csv"></label>
-          <button class="button demo" id="demo">Charger la démo</button>
-          <button class="button" id="template">Télécharger le modèle</button>
+          <label class="button primary file-button">Importer Excel<input id="student-file" type="file" accept=".xlsx,.xls,.csv"></label>
           <button class="button" id="bibs" ${state.students.length?'':'disabled'}>Créer les dossards PDF</button>
+          <button class="button subtle" id="backup">Sauvegarde de secours</button>
         </div>
-        <p class="hint">Colonnes reconnues : Nom, Prénom, Classe, Niveau, Sexe, Enseignant/PP, Dossard. Si le dossard manque, il est attribué automatiquement.</p>
       </div>
-      <div class="card span-2 table-card"><table><thead><tr><th>Dossard</th><th>Élève</th><th>Classe</th><th>Niveau</th><th>Sexe</th><th>Course</th></tr></thead><tbody>
-        ${state.students.map(s => `<tr><td class="bib">#${s.bib}</td><td>${esc(nameOf(s))}</td><td>${esc(s.className)}</td><td>${esc(s.level)}</td><td>${esc(s.sex)}</td><td>${esc(s.raceId ? (raceOf(s.raceId)?.name || 'Affectée') : '—')}</td></tr>`).join('')}
-      </tbody></table></div>
-      <div class="card span-2"><div class="card-head"><div><h2>Classes & professeurs</h2><p>Rattache chaque classe à un ou deux professeurs pour calculer le classement enseignants.</p></div></div>
-        <div class="class-teacher-grid">${classNames().map(cls => { const t=state.classTeachers?.[cls]||[]; return `<div class="class-teacher-row"><strong>${esc(cls)}</strong><input data-teacher1="${esc(cls)}" value="${esc(t[0]||'')}" placeholder="Professeur 1"><input data-teacher2="${esc(cls)}" value="${esc(t[1]||'')}" placeholder="Professeur 2"><button class="button" data-save-teachers="${esc(cls)}">Enregistrer</button></div>`; }).join('')}</div>
+
+      <div class="summary-strip">
+        <div><strong>${state.students.length}</strong><span>élèves</span></div>
+        <div><strong>${classNames().length}</strong><span>classes</span></div>
+        <div class="${issues.length?'summary-alert':'summary-ok'}"><strong>${issues.length}</strong><span>anomalie${issues.length>1?'s':''}</span></div>
+      </div>
+
+      ${issues.length ? `<div class="alert-card"><strong>À vérifier avant impression</strong><p>${esc(issues.slice(0,5).join(' · '))}${issues.length>5?' · …':''}</p></div>` : state.students.length ? '<div class="ok-card">✓ Données cohérentes pour les dossards</div>' : ''}
+
+      <div class="search-card">
+        <input id="student-search" value="${esc(studentSearch)}" placeholder="Rechercher un élève, une classe ou un dossard">
+        ${q ? `<div class="search-results">${matches.length ? matches.map(s=>`<button data-edit-student="${s.id}"><strong>#${esc(s.bib||'—')} · ${esc(nameOf(s))}</strong><span>${esc(s.className)} · ${s.sex==='F'?'Fille':s.sex==='M'?'Garçon':'Sexe ?'}</span></button>`).join('') : '<p class="empty">Aucun élève trouvé.</p>'}</div>` : ''}
+      </div>
+
+      <div class="section-head"><div><h3>Classes</h3><p>Une couleur par niveau. Ouvre une classe pour gérer les élèves et son professeur d’EPS référent.</p></div></div>
+      <div class="class-grid">
+        ${classNames().map(cls=>{
+          const x=classStats(cls), teacher=state.classTeachers?.[cls]?.[0]||'Prof EPS à renseigner';
+          return `<button class="class-card ${levelTone(x.level)}" data-open-class="${esc(cls)}">
+            <span class="class-level">${esc(x.level||'')}</span>
+            <strong>${esc(cls)}</strong>
+            <span>${x.total} élèves · ${x.girls} F · ${x.boys} G</span>
+            <small>${esc(teacher)}</small>
+          </button>`;
+        }).join('') || '<div class="empty-state">Importe la liste des élèves pour afficher les classes.</div>'}
       </div>
     </section>`;
   }
 
   function racesPage() {
     const levels = [...new Set(state.students.map(s => s.level).filter(Boolean))].sort();
-    return `<section class="page-grid">
-      <div class="card span-2"><div class="card-head"><div><h2>Paramètres du cross</h2><p>Réglage commun à toutes les courses.</p></div><strong>${state.crossDistanceM ? `${state.crossDistanceM} m` : 'À renseigner'}</strong></div>
-        <div class="inline-setting"><label class="field">Distance unique du cross (mètres)<input id="cross-distance" type="number" min="100" step="10" inputmode="numeric" value="${state.crossDistanceM || ''}" placeholder="Ex. 1500"></label><button class="button primary" id="save-settings">Enregistrer</button></div>
+    return `<section class="courses-page">
+      <div class="distance-card">
+        <div><span class="eyebrow">PARCOURS</span><h2>Distance unique</h2><p>La même distance sera utilisée pour toutes les courses et les vitesses moyennes.</p></div>
+        <div class="distance-input"><input id="cross-distance" type="number" min="100" step="10" inputmode="numeric" value="${state.crossDistanceM || ''}" placeholder="1500"><span>m</span><button class="button primary" id="save-settings">Enregistrer</button></div>
       </div>
-      <div class="card"><h2>Créer une course</h2>
-        <label class="field">Nom de la course<input id="race-name" placeholder="Ex. 6e filles"></label>
-        <div class="field"><span>Niveaux</span><div class="chip-row">${levels.map(l => `<button class="chip" data-level="${esc(l)}">${esc(l)}</button>`).join('')}</div></div>
-        <div class="field"><span>Sexe</span><div class="chip-row"><button class="chip" data-sex="F">Filles</button><button class="chip" data-sex="M">Garçons</button><button class="chip" data-sex="X">Non renseigné</button></div></div>
-        <button class="button primary full" id="create-race">Créer et affecter les élèves</button>
+
+      <div class="courses-grid">
+        <div class="card clean-card"><span class="eyebrow">CRÉATION MANUELLE</span><h2>Créer une course</h2>
+          <label class="field">Nom<input id="race-name" placeholder="Ex. 6e filles"></label>
+          <div class="field"><span>Niveau</span><div class="chip-row">${levels.map(l => `<button class="chip" data-level="${esc(l)}">${esc(l)}</button>`).join('')}</div></div>
+          <div class="field"><span>Sexe</span><div class="chip-row"><button class="chip" data-sex="F">Filles</button><button class="chip" data-sex="M">Garçons</button><button class="chip" data-sex="X">Non renseigné</button></div></div>
+          <div class="race-preview"><strong id="race-count">0</strong><span>élève sélectionné</span></div>
+          <button class="button primary full" id="create-race">Créer la course</button>
+        </div>
+
+        <div class="card clean-card"><div class="section-head"><div><span class="eyebrow">COURSES</span><h2>${state.races.length} créée${state.races.length>1?'s':''}</h2></div></div>
+          <div class="race-list">${state.races.length ? state.races.map(r => {
+            const runners=state.students.filter(s=>s.raceId===r.id), done=runners.filter(s=>s.elapsedMs!=null).length;
+            const status=!r.startedAt?'À démarrer':r.endedAt?'Terminée':'En cours';
+            return `<div class="race-row"><div><strong>${esc(r.name)}</strong><span>${runners.length} élèves · ${r.levels.map(esc).join(', ')} · ${r.sexes.join('/')}</span><small class="race-status ${r.endedAt?'done':r.startedAt?'live':''}">${status}${r.startedAt?` · ${done}/${runners.length} arrivés`:''}</small></div>
+              <div class="race-actions">${!r.startedAt?`<button class="button danger-ghost" data-delete="${r.id}">Supprimer</button>`:''}</div></div>`;
+          }).join('') : '<p class="empty">Aucune course créée.</p>'}</div>
+        </div>
       </div>
-      <div class="card"><h2>Courses</h2><div class="race-list">${state.races.length ? state.races.map(r => {
-        const runners = state.students.filter(s => s.raceId === r.id);
-        const done = runners.filter(s => s.elapsedMs != null).length;
-        return `<div class="race-row"><div><strong>${esc(r.name)}</strong><span>${runners.length} élèves · ${r.levels.map(esc).join(', ')} · ${r.sexes.join('/')} · ${state.crossDistanceM ? `${state.crossDistanceM} m` : 'distance à régler'}</span>${r.startedAt ? `<span>Démarrée à ${new Date(r.startedAt).toLocaleTimeString('fr-FR')}</span>` : ''}${r.endedAt ? `<span>Terminée à ${new Date(r.endedAt).toLocaleTimeString('fr-FR')}</span>` : ''}</div>
-          <div class="race-actions">${!r.startedAt ? `<button class="button danger-ghost" data-delete="${r.id}">Supprimer</button><button class="button start" data-start="${r.id}">DÉPART</button>` : r.endedAt ? `<span class="started">${done}/${runners.length} classés · ${runners.length-done} absents/non arrivés</span><button class="button" data-reopen="${r.id}">Réouvrir</button>` : `<span class="started">${done}/${runners.length} arrivés</span><button class="button finish-race" data-finish-race="${r.id}">TERMINER</button>`}</div></div>`;
-      }).join('') : '<p class="empty">Aucune course créée.</p>'}</div></div>
     </section>`;
   }
 
   function timingPage() {
-    const active = state.races.filter(r => r.startedAt != null && !r.endedAt);
-    const pending = state.students.filter(s => s.raceId && raceOf(s.raceId)?.startedAt && !raceOf(s.raceId)?.endedAt && s.elapsedMs == null).length;
-    const done = state.students.filter(s => s.elapsedMs != null).length;
-    return `<section class="timing-layout">
-      <div class="card timing-main"><div class="timing-title"><div><h2>Arrivées</h2><p>Scanne un dossard : le temps est enregistré immédiatement.</p></div><div class="live-dot ${state.scannerSeen?'ready':''}">${state.scannerSeen?'● SCANNER OPÉRATIONNEL':'○ SCANNER NON TESTÉ'}</div></div>
-        <div class="big-notice">${esc(state.notice)}</div>
-        <div class="timing-stats"><div><strong>${active.length}</strong><span>courses démarrées</span></div><div><strong>${pending}</strong><span>élèves encore en course</span></div><div><strong>${done}</strong><span>arrivées enregistrées</span></div></div>
-        <div class="actions giant-actions"><button class="button warning" id="no-bib">SANS DOSSARD</button><button class="button" id="undo">Annuler la dernière arrivée</button><button class="button" id="test-scan">Tester le scanner</button></div>
-        <p class="hint">Dernier code reçu : <strong>${esc(state.lastScan || 'aucun')}</strong>${state.scannerLastAt ? ` · ${new Date(state.scannerLastAt).toLocaleTimeString('fr-FR')}` : ''}. Le lecteur doit être jumelé en Bluetooth HID et envoyer Entrée après le code.</p>
-        <div class="recent-arrivals"><h3>Dernières arrivées</h3>${state.arrivals.slice(-8).reverse().map(a=>{const s=state.students.find(x=>x.id===a.studentId);return s?`<div class="recent-arrival"><strong>#${s.bib} ${esc(nameOf(s))}</strong><span>${fmt(a.elapsedMs)} · ${esc(raceOf(a.raceId)?.name||'')}</span></div>`:'';}).join('') || '<p class="empty">Aucune arrivée enregistrée.</p>'}</div>
+    const upcoming=state.races.filter(r=>!r.startedAt);
+    const active=state.races.filter(r=>r.startedAt && !r.endedAt);
+    const ended=state.races.filter(r=>r.endedAt);
+    const pending=active.reduce((n,r)=>n+state.students.filter(s=>s.raceId===r.id&&s.elapsedMs==null).length,0);
+    const done=state.students.filter(s=>s.elapsedMs!=null).length;
+    const last=currentLastArrival();
+    return `<section class="day-page">
+      <div class="day-statusbar">
+        <span class="status-chip ${state.scannerSeen?'ok':''}">${state.scannerSeen?'● Scanner prêt':'○ Scanner non testé'}</span>
+        <span class="status-chip">Parcours · ${state.crossDistanceM ? state.crossDistanceM+' m' : 'distance à régler'}</span>
+        <span class="status-chip">${active.length} course${active.length>1?'s':''} en cours</span>
       </div>
-      <div class="card"><h2>Courses actives</h2><div class="race-list">${active.length ? active.map(r => {
-        const runners = state.students.filter(s => s.raceId === r.id), done = runners.filter(s => s.elapsedMs != null).length;
-        return `<div class="race-row compact"><div><strong>${esc(r.name)}</strong><span>Départ ${new Date(r.startedAt).toLocaleTimeString('fr-FR')} · ${state.crossDistanceM ? `${state.crossDistanceM} m` : 'distance à régler'}</span></div><div class="race-actions"><strong>${done}/${runners.length}</strong><button class="button finish-race" data-finish-race="${r.id}">TERMINER</button></div></div>`;
-      }).join('') : '<p class="empty">Aucune course démarrée.</p>'}</div></div>
+
+      <div class="day-layout">
+        <div class="day-main">
+          <div class="scan-feedback ${esc(state.noticeKind||'info')}">
+            <span class="eyebrow">ARRIVÉE</span>
+            <strong>${esc(state.notice||'Prêt à scanner')}</strong>
+          </div>
+
+          <div class="day-stats"><div><strong>${pending}</strong><span>encore en course</span></div><div><strong>${done}</strong><span>arrivées enregistrées</span></div><div><strong>${active.length}</strong><span>courses actives</span></div></div>
+
+          <div class="day-actions">
+            <button class="button no-bib-button" id="no-bib" ${active.length?'':'disabled'}>SANS DOSSARD</button>
+            <button class="button undo-button" id="undo" ${last?'':'disabled'}>${last?`Annuler #${last.s.bib} · ${esc(nameOf(last.s))} · ${fmt(last.a.elapsedMs)}`:'Aucune arrivée à annuler'}</button>
+          </div>
+
+          <div class="recent-arrivals"><div class="section-head"><h3>Dernières arrivées</h3><button class="text-button" id="test-scan">Tester le scanner</button></div>
+            ${state.arrivals.slice(-10).reverse().map(a=>{const s=state.students.find(x=>x.id===a.studentId);return s?`<div class="recent-arrival"><strong>#${s.bib} ${esc(nameOf(s))}</strong><span>${fmt(a.elapsedMs)} · ${esc(raceOf(a.raceId)?.name||'')}</span></div>`:'';}).join('') || '<p class="empty">Aucune arrivée enregistrée.</p>'}
+          </div>
+        </div>
+
+        <aside class="day-side">
+          <div class="day-panel"><div class="section-head"><div><span class="eyebrow">DÉPARTS</span><h3>Courses à venir</h3></div></div>
+            <div class="race-list">${upcoming.length ? upcoming.map(r=>{const n=state.students.filter(s=>s.raceId===r.id).length;return `<div class="start-card"><div><strong>${esc(r.name)}</strong><span>${n} élèves</span></div><button class="start-now" data-start="${r.id}">DÉPART</button></div>`;}).join('') : '<p class="empty">Toutes les courses ont été lancées.</p>'}</div>
+          </div>
+
+          <div class="day-panel"><div class="section-head"><div><span class="eyebrow">EN COURS</span><h3>Courses actives</h3></div></div>
+            <div class="race-list">${active.length ? active.map(r=>{const a=state.students.filter(s=>s.raceId===r.id), d=a.filter(s=>s.elapsedMs!=null).length;return `<div class="active-card"><div><strong>${esc(r.name)}</strong><span>Départ ${new Date(r.startedAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span><b>${d}/${a.length} arrivés</b></div><button class="finish-now" data-finish-race="${r.id}">TERMINER</button></div>`;}).join('') : '<p class="empty">Aucune course en cours.</p>'}</div>
+          </div>
+
+          ${ended.length ? `<div class="day-panel compact-panel"><div class="section-head"><div><span class="eyebrow">TERMINÉES</span></div></div>${ended.slice(-4).reverse().map(r=>`<div class="ended-row"><span>${esc(r.name)}</span><button class="text-button" data-reopen="${r.id}">Réouvrir</button></div>`).join('')}</div>` : ''}
+        </aside>
+      </div>
     </section>`;
   }
 
   function resultsPage() {
-    const g = rankings(), done = state.students.filter(s => s.elapsedMs != null).length;
-    const ended = state.races.filter(r => r.endedAt);
-    const selectedRaceId = state.resultRaceId && ended.some(r=>r.id===state.resultRaceId) ? state.resultRaceId : (ended[0]?.id || '');
-    const selectedRace = raceOf(selectedRaceId);
-    const raceRows = g.byRace.filter(r=>r.raceId===selectedRaceId);
-    const runners = selectedRace ? state.students.filter(s=>s.raceId===selectedRace.id) : [];
-    return `<section class="results-layout">
-      <div class="card results-top">
-        <div class="card-head"><div><h2>Résultats</h2><p>${done} élèves classés · ${ended.length} course(s) terminée(s).</p></div>
-          <button class="button primary" id="export-all-results" ${done?'':'disabled'}>Exporter tous les résultats</button>
-        </div>
-      </div>
+    const g=rankings(), done=state.students.filter(s=>s.elapsedMs!=null).length;
+    const ended=state.races.filter(r=>r.endedAt);
+    const mode=state.resultMode||'courses';
+    const selectedRaceId=state.resultRaceId && ended.some(r=>r.id===state.resultRaceId) ? state.resultRaceId : (ended[0]?.id||'');
+    const selectedRace=raceOf(selectedRaceId);
+    const raceRows=g.byRace.filter(r=>r.raceId===selectedRaceId);
 
-      <div class="card results-sidebar">
-        <h3>Courses terminées</h3>
-        <div class="race-list">${ended.length ? ended.map(r => {
-          const rr=state.students.filter(s=>s.raceId===r.id), classified=rr.filter(s=>s.elapsedMs!=null).length;
-          return `<div class="result-race-item ${r.id===selectedRaceId?'selected':''}">
-            <div><strong>${esc(r.name)}</strong><span>${classified}/${rr.length} classés</span></div>
-            <div class="result-race-actions"><button class="button" data-view-race="${r.id}">Voir résultats</button><button class="button" data-export-race="${r.id}">Exporter résultats</button></div>
-          </div>`;
-        }).join('') : '<p class="empty">Aucune course terminée pour le moment.</p>'}</div>
-      </div>
+    let content='';
+    if(mode==='courses'){
+      content=`<div class="results-split"><div class="results-list">${ended.map(r=>{const rr=state.students.filter(s=>s.raceId===r.id), n=rr.filter(s=>s.elapsedMs!=null).length;return `<button class="result-course ${r.id===selectedRaceId?'selected':''}" data-view-race="${r.id}"><strong>${esc(r.name)}</strong><span>${n}/${rr.length} classés</span></button>`;}).join('')||'<p class="empty">Aucune course terminée.</p>'}</div>
+        <div class="card table-card results-main" id="race-results-panel">${selectedRace?`<div class="card-head"><div><h3>${esc(selectedRace.name)}</h3><p>${raceRows.length} classés</p></div><button class="button" data-export-race="${selectedRace.id}">Exporter PDF</button></div>${raceRows.length?`<table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th><th>Vitesse</th></tr></thead><tbody>${raceRows.map(r=>`<tr><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td><b>${r.time}</b></td><td>${r.speed}</td></tr>`).join('')}</tbody></table>`:'<p class="empty">Aucune arrivée.</p>'}`:'<p class="empty">Sélectionne une course.</p>'}</div></div>`;
+    } else if(mode==='individual'){
+      content=`<div class="card table-card"><table><thead><tr><th>Niveau</th><th>Sexe</th><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th></tr></thead><tbody>${g.individual.map(r=>`<tr><td>${esc(r.level)}</td><td>${esc(r.sex)}</td><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td><b>${r.time}</b></td></tr>`).join('')}</tbody></table></div>`;
+    } else if(mode==='classes'){
+      content=`<div class="results-two"><div class="card table-card"><h3>Classes par niveau</h3><table><thead><tr><th>Niveau</th><th>Rang</th><th>Classe</th><th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${g.classAverages.map(r=>`<tr><td>${esc(r.level)}</td><td><b>${r.rank}</b></td><td>${esc(r.className)}</td><td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')}</tbody></table></div><div class="card table-card"><h3>Collège</h3><table><thead><tr><th>Rang</th><th>Classe</th><th>Niveau</th><th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${g.classOverall.map(r=>`<tr><td><b>${r.rank}</b></td><td>${esc(r.className)}</td><td>${esc(r.level)}</td><td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')}</tbody></table></div></div>`;
+    } else {
+      content=`<div class="card table-card"><table><thead><tr><th>Rang</th><th>Professeur EPS</th><th>Classes</th><th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${g.teacherAverages.map(r=>`<tr><td><b>${r.rank}</b></td><td>${esc(r.teacher)}</td><td>${esc(r.classes.join(', '))}</td><td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')||'<tr><td colspan="5">Aucun professeur EPS renseigné.</td></tr>'}</tbody></table></div>`;
+    }
 
-      <div class="card results-main table-card" id="race-results-panel" tabindex="-1">
-        ${selectedRace ? `<div class="card-head"><div><h3>${esc(selectedRace.name)}</h3><p>${runners.filter(s=>s.elapsedMs!=null).length} classés · ${runners.filter(s=>s.elapsedMs==null).length} absents/non classés · ${state.crossDistanceM ? state.crossDistanceM+' m' : 'distance non renseignée'}</p></div></div>
-        ${raceRows.length ? `<table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th><th>Vitesse moy.</th></tr></thead><tbody>${raceRows.map(r=>`<tr><td>${r.rank}</td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td>${r.time}</td><td>${r.speed}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">Aucune arrivée enregistrée pour cette course.</p>'}` : '<p class="empty">Sélectionne une course terminée pour afficher son classement.</p>'}
-      </div>
-
-      <div class="card table-card"><h3>Meilleure classe par niveau</h3><table><thead><tr><th>Niveau</th><th>Rang</th><th>Classe</th><th>Classés</th><th>Inscrits</th><th>Temps moyen</th></tr></thead><tbody>${g.classAverages.map(r => `<tr><td>${esc(r.level)}</td><td>${r.rank}</td><td>${esc(r.className)}</td><td>${r.count}</td><td>${r.enrolled}</td><td>${r.average}</td></tr>`).join('')}</tbody></table></div>
-      <div class="card table-card"><h3>Meilleure classe du collège</h3><table><thead><tr><th>Rang</th><th>Classe</th><th>Niveau</th><th>Classés</th><th>Inscrits</th><th>Temps moyen</th></tr></thead><tbody>${g.classOverall.map(r => `<tr><td>${r.rank}</td><td>${esc(r.className)}</td><td>${esc(r.level)}</td><td>${r.count}</td><td>${r.enrolled}</td><td>${r.average}</td></tr>`).join('')}</tbody></table></div>
-      <div class="card span-2 table-card"><h3>Classement des professeurs</h3><table><thead><tr><th>Rang</th><th>Professeur</th><th>Classes</th><th>Élèves classés</th><th>Élèves inscrits</th><th>Temps moyen</th></tr></thead><tbody>${g.teacherAverages.map(r => `<tr><td>${r.rank}</td><td>${esc(r.teacher)}</td><td>${esc(r.classes.join(', '))}</td><td>${r.count}</td><td>${r.enrolled}</td><td>${r.average}</td></tr>`).join('')}</tbody></table></div>
+    return `<section class="results-page">
+      <div class="hero-card results-hero"><div><span class="eyebrow">RÉSULTATS</span><h2>${done} élèves classés</h2><p>${ended.length} course${ended.length>1?'s':''} terminée${ended.length>1?'s':''}</p></div><div class="actions"><button class="button" id="export-excel" ${done?'':'disabled'}>Excel</button><button class="button primary" id="export-all-results" ${done?'':'disabled'}>PDF complet</button></div></div>
+      <div class="result-tabs"><button data-result-mode="courses" class="${mode==='courses'?'active':''}">Courses</button><button data-result-mode="individual" class="${mode==='individual'?'active':''}">Individuels</button><button data-result-mode="classes" class="${mode==='classes'?'active':''}">Classes</button><button data-result-mode="teachers" class="${mode==='teachers'?'active':''}">Professeurs</button></div>
+      ${content}
     </section>`;
   }
 
+  function classModal() {
+    const cls=openClass, x=classStats(cls), teacher=state.classTeachers?.[cls]?.[0]||'';
+    return `<div class="modal-backdrop sheet-backdrop"><div class="modal class-modal"><div class="modal-head"><div><span class="eyebrow">${esc(x.level)}</span><h2>${esc(cls)}</h2><p>${x.total} élèves · ${x.girls} filles · ${x.boys} garçons</p></div><button class="close" id="close-class">×</button></div>
+      <div class="teacher-box"><label>Professeur d’EPS référent<input id="class-teacher" value="${esc(teacher)}" placeholder="Nom du professeur"></label><button class="button" id="save-class-teacher">Enregistrer</button></div>
+      <div class="class-actions"><button class="button primary" id="add-student">+ Ajouter un élève</button></div>
+      <div class="class-students">${x.students.sort((a,b)=>nameOf(a).localeCompare(nameOf(b),'fr')).map(s=>`<button data-edit-student="${s.id}"><span class="student-bib">#${esc(s.bib||'—')}</span><strong>${esc(nameOf(s))}</strong><span>${s.sex==='F'?'Fille':s.sex==='M'?'Garçon':'Sexe ?'}</span><small>Modifier</small></button>`).join('')}</div>
+    </div></div>`;
+  }
+
+  function studentModal() {
+    const isNew=studentEditorId==='new';
+    const s=isNew?{lastName:'',firstName:'',className:openClass||'',sex:'M',bib:''}:state.students.find(x=>x.id===studentEditorId);
+    if(!s) return '';
+    return `<div class="modal-backdrop editor-backdrop"><div class="modal student-modal"><div class="modal-head"><div><span class="eyebrow">${isNew?'NOUVEL ÉLÈVE':'MODIFIER'}</span><h2>${isNew?'Ajouter un élève':esc(nameOf(s))}</h2></div><button class="close" id="close-student">×</button></div>
+      <div class="form-grid"><label>Nom<input id="student-last" value="${esc(s.lastName)}"></label><label>Prénom<input id="student-first" value="${esc(s.firstName)}"></label><label>Classe<input id="student-class" value="${esc(s.className)}"></label><label>Sexe<select id="student-sex"><option value="F" ${s.sex==='F'?'selected':''}>Fille</option><option value="M" ${s.sex==='M'?'selected':''}>Garçon</option><option value="X" ${s.sex==='X'?'selected':''}>Non renseigné</option></select></label><label>Dossard<input id="student-bib" type="number" inputmode="numeric" value="${esc(s.bib||'')}"></label></div>
+      <button class="button primary full" id="save-student">${isNew?'Ajouter':'Enregistrer'}</button>
+    </div></div>`;
+  }
+
   function manualModal() {
-    const q = manualQuery.trim().toLowerCase();
-    const candidates = state.students.filter(s => s.elapsedMs == null && s.raceId && raceOf(s.raceId)?.startedAt && !raceOf(s.raceId)?.endedAt && (!q || String(s.bib).includes(q) || nameOf(s).toLowerCase().includes(q) || String(s.className).toLowerCase().includes(q))).slice(0,30);
-    return `<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><h2>Arrivée sans dossard</h2><p>Heure figée à ${new Date(manualStamp).toLocaleTimeString('fr-FR')}.</p></div><button class="close" id="close-modal">×</button></div>
-      <input class="manual-search" id="manual-search" value="${esc(manualQuery)}" placeholder="Nom, 3 premières lettres, classe ou n° de dossard">
-      <div class="candidate-list">${candidates.map(s => `<button data-manual="${s.id}"><strong>#${s.bib}</strong><span>${esc(nameOf(s))} · ${esc(s.className)}</span><small>${esc(raceOf(s.raceId)?.name || '')}</small></button>`).join('')}</div></div></div>`;
+    const q=manualQuery.trim().toLowerCase();
+    const candidates=state.students.filter(s=>s.elapsedMs==null&&s.raceId&&raceOf(s.raceId)?.startedAt&&!raceOf(s.raceId)?.endedAt&&(!q||String(s.bib||'').includes(q)||nameOf(s).toLowerCase().includes(q)||String(s.className).toLowerCase().includes(q))).slice(0,30);
+    return `<div class="modal-backdrop manual-backdrop"><div class="modal manual-modal"><div class="modal-head"><div><span class="eyebrow">TEMPS FIGÉ</span><h2>Sans dossard</h2><p>${new Date(manualStamp).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})} · le scanner reste actif en arrière-plan</p></div><button class="close" id="close-modal">×</button></div>
+      <input class="manual-search" id="manual-search" value="${esc(manualQuery)}" placeholder="Nom, classe ou dossard">
+      <div class="candidate-list">${candidates.map(s=>`<button data-manual="${s.id}"><strong>#${esc(s.bib||'—')}</strong><span>${esc(nameOf(s))} · ${esc(s.className)}</span><small>${esc(raceOf(s.raceId)?.name||'')}</small></button>`).join('')||'<p class="empty">Tape un nom ou une classe.</p>'}</div>
+    </div></div>`;
   }
 
   function bind() {
-    document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { state.tab = b.dataset.tab; save(); render(); });
-    $('#student-file')?.addEventListener('change', e => importStudents(e.target.files?.[0]));
-    $('#demo')?.addEventListener('click', loadDemo);
-    $('#template')?.addEventListener('click', downloadTemplate);
-    $('#bibs')?.addEventListener('click', exportBibs);
-    document.querySelectorAll('.chip').forEach(b => b.onclick = () => b.classList.toggle('selected'));
-    $('#create-race')?.addEventListener('click', createRace);
-    document.querySelectorAll('[data-delete]').forEach(b => b.onclick = () => deleteRace(b.dataset.delete));
-    document.querySelectorAll('[data-start]').forEach(b => b.onclick = () => startRace(b.dataset.start));
-    document.querySelectorAll('[data-finish-race]').forEach(b => b.onclick = () => finishRace(b.dataset.finishRace));
-    document.querySelectorAll('[data-reopen]').forEach(b => b.onclick = () => reopenRace(b.dataset.reopen));
-    document.querySelectorAll('[data-save-teachers]').forEach(b => b.onclick = () => saveClassTeachers(b.dataset.saveTeachers));
-    $('#no-bib')?.addEventListener('click', () => { manualStamp = Date.now(); manualQuery = ''; render(); setTimeout(() => $('#manual-search')?.focus(), 30); });
-    $('#close-modal')?.addEventListener('click', closeManual);
-    $('#manual-search')?.addEventListener('input', e => { manualQuery = e.target.value; render(); setTimeout(() => { const x=$('#manual-search'); if(x){ x.focus(); x.setSelectionRange(x.value.length,x.value.length); } },0); });
-    document.querySelectorAll('[data-manual]').forEach(b => b.onclick = () => manualFinish(b.dataset.manual));
-    $('#undo')?.addEventListener('click', undoLast);
-    $('#test-scan')?.addEventListener('click', () => notify('Mode test : scanne un dossard. Le code doit apparaître ici.'));
-    $('#export-all-results')?.addEventListener('click', exportResultsPdf);
-    document.querySelectorAll('[data-view-race]').forEach(b => b.onclick = () => {
-      state.resultRaceId=b.dataset.viewRace;
-      save();
-      render();
-      setTimeout(() => {
-        const panel=document.getElementById('race-results-panel');
-        panel?.scrollIntoView({behavior:'smooth',block:'start',inline:'nearest'});
-        try { panel?.focus({preventScroll:true}); } catch {}
-      },40);
-    });
-    document.querySelectorAll('[data-export-race]').forEach(b => b.onclick = () => exportRacePdf(b.dataset.exportRace));
-    $('#save-settings')?.addEventListener('click', saveSettings);
+    document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;save();render();});
+    $('#student-file')?.addEventListener('change',e=>importStudents(e.target.files?.[0]));
+    $('#bibs')?.addEventListener('click',exportBibs);
+    $('#backup')?.addEventListener('click',exportBackup);
+    $('#student-search')?.addEventListener('input',e=>{studentSearch=e.target.value;render();setTimeout(()=>{const x=$('#student-search');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}},0);});
+    document.querySelectorAll('[data-open-class]').forEach(b=>b.onclick=()=>{openClass=b.dataset.openClass;render();});
+    $('#close-class')?.addEventListener('click',()=>{openClass='';render();});
+    $('#save-class-teacher')?.addEventListener('click',()=>saveClassTeachers(openClass));
+    $('#add-student')?.addEventListener('click',()=>{studentEditorId='new';render();});
+    document.querySelectorAll('[data-edit-student]').forEach(b=>b.onclick=()=>{studentEditorId=b.dataset.editStudent;render();});
+    $('#close-student')?.addEventListener('click',()=>{studentEditorId=null;render();});
+    $('#save-student')?.addEventListener('click',saveStudentEditor);
+
+    document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{b.classList.toggle('selected');updateRaceCount();});
+    $('#create-race')?.addEventListener('click',createRace);
+    document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>deleteRace(b.dataset.delete));
+    document.querySelectorAll('[data-start]').forEach(b=>b.onclick=()=>startRace(b.dataset.start));
+    document.querySelectorAll('[data-finish-race]').forEach(b=>b.onclick=()=>finishRace(b.dataset.finishRace));
+    document.querySelectorAll('[data-reopen]').forEach(b=>b.onclick=()=>reopenRace(b.dataset.reopen));
+    $('#save-settings')?.addEventListener('click',saveSettings);
+
+    $('#no-bib')?.addEventListener('click',()=>{manualStamp=Date.now();manualQuery='';state.notice='Temps sans dossard figé';state.noticeKind='warning';save();render();});
+    $('#close-modal')?.addEventListener('click',closeManual);
+    $('#manual-search')?.addEventListener('input',e=>{manualQuery=e.target.value;render();setTimeout(()=>{const x=$('#manual-search');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}},0);});
+    document.querySelectorAll('[data-manual]').forEach(b=>b.onclick=()=>manualFinish(b.dataset.manual));
+    $('#undo')?.addEventListener('click',undoLast);
+    $('#test-scan')?.addEventListener('click',()=>notify('Mode test : scanne un dossard maintenant.','info'));
+
+    document.querySelectorAll('[data-result-mode]').forEach(b=>b.onclick=()=>{state.resultMode=b.dataset.resultMode;save();render();});
+    $('#export-all-results')?.addEventListener('click',exportResultsPdf);
+    $('#export-excel')?.addEventListener('click',exportExcel);
+    document.querySelectorAll('[data-view-race]').forEach(b=>b.onclick=()=>{state.resultRaceId=b.dataset.viewRace;save();render();});
+    document.querySelectorAll('[data-export-race]').forEach(b=>b.onclick=()=>exportRacePdf(b.dataset.exportRace));
+
+    updateRaceCount();
   }
 
   function loadDemo() {
