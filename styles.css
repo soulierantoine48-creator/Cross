@@ -949,3 +949,6 @@ td b{color:#26364a}
 @media(max-width:760px){
   .bib-class-grid{grid-template-columns:repeat(3,1fr)}
 }
+
+.class-results-detail{margin-bottom:24px}
+.class-results-detail .results-list{max-height:520px;overflow:auto}

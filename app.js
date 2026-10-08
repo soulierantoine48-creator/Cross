@@ -2,7 +2,7 @@
   'use strict';
 
   const STORAGE_KEY = 'cross-college-state-v2';
-  const EMPTY = { students: [], races: [], arrivals: [], classTeachers: {}, crossDistanceM: 0, scannerSeen: false, scannerLastAt: 0, tab: 'students', notice: 'Prêt', noticeKind: 'info', lastScan: '', resultRaceId: '', resultMode: 'courses', manualPending: [] };
+  const EMPTY = { students: [], races: [], arrivals: [], classTeachers: {}, crossDistanceM: 0, scannerSeen: false, scannerLastAt: 0, tab: 'students', notice: 'Prêt', noticeKind: 'info', lastScan: '', resultRaceId: '', resultClassName: '', resultMode: 'courses', manualPending: [] };
   const EPS_TEACHERS = ['Libourel','Soulier','Sabardeil','Ichou','Gourdon'];
   const DEMO = [
     [101,'DUPONT','Lina','6A','6e','F','Mme Martin'], [102,'MARTIN','Noé','6A','6e','M','Mme Martin'],
@@ -343,11 +343,15 @@
     let content='';
     if(mode==='courses'){
       content=`<div class="results-split"><div class="results-list">${ended.map(r=>{const rr=state.students.filter(s=>s.raceId===r.id), n=rr.filter(s=>s.elapsedMs!=null).length;return `<button class="result-course ${r.id===selectedRaceId?'selected':''}" data-view-race="${r.id}"><strong>${esc(r.name)}</strong><span>${n}/${rr.length} classés</span></button>`;}).join('')||'<p class="empty">Aucune course terminée.</p>'}</div>
-        <div class="card table-card results-main" id="race-results-panel">${selectedRace?`<div class="card-head"><div><h3>${esc(selectedRace.name)}</h3><p>${raceRows.length} classés</p></div><div class="result-actions"><button class="button" data-reopen-result="${selectedRace.id}">Réouvrir</button><button class="button danger-ghost" data-delete-finished="${selectedRace.id}">Supprimer la course</button><button class="button" data-export-race="${selectedRace.id}">Exporter PDF</button></div></div>${raceRows.length?`<table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th><th>Vitesse</th><th></th></tr></thead><tbody>${raceRows.map(r=>`<tr><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td><b>${r.time}</b></td><td>${r.speed}</td><td><button class="row-edit" data-edit-result="${r.studentId}">Modifier</button></td></tr>`).join('')}</tbody></table>`:'<p class="empty">Aucune arrivée.</p>'}`:'<p class="empty">Sélectionne une course.</p>'}</div></div>`;
+        <div class="card table-card results-main" id="race-results-panel">${selectedRace?`<div class="card-head"><div><h3>${esc(selectedRace.name)}</h3><p>${raceRows.length} classés</p></div><div class="result-actions"><button class="button" data-reopen-result="${selectedRace.id}">Réouvrir</button><button class="button danger-ghost" data-delete-finished="${selectedRace.id}">Supprimer la course</button><button class="button" data-export-race="${selectedRace.id}" ${raceRows.length?'':'disabled'}>PDF course</button><button class="button" data-export-race-excel="${selectedRace.id}" ${raceRows.length?'':'disabled'}>Excel course</button></div></div>${raceRows.length?`<table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th><th>Vitesse</th><th></th></tr></thead><tbody>${raceRows.map(r=>`<tr><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td><b>${r.time}</b></td><td>${r.speed}</td><td><button class="row-edit" data-edit-result="${r.studentId}">Modifier</button></td></tr>`).join('')}</tbody></table>`:'<p class="empty">Aucune arrivée.</p>'}`:'<p class="empty">Sélectionne une course.</p>'}</div></div>`;
     } else if(mode==='individual'){
       content=`<div class="card table-card"><table><thead><tr><th>Niveau</th><th>Sexe</th><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th></tr></thead><tbody>${g.individual.map(r=>`<tr><td>${esc(r.level)}</td><td>${esc(r.sex)}</td><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td><b>${r.time}</b></td></tr>`).join('')}</tbody></table></div>`;
     } else if(mode==='classes'){
-      content=`<div class="results-two"><div class="card table-card"><h3>Classes par niveau</h3><table><thead><tr><th>Niveau</th><th>Rang</th><th>Classe</th><th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${g.classAverages.map(r=>`<tr><td>${esc(r.level)}</td><td><b>${r.rank}</b></td><td>${esc(r.className)}</td><td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')}</tbody></table></div><div class="card table-card"><h3>Collège</h3><table><thead><tr><th>Rang</th><th>Classe</th><th>Niveau</th><th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${g.classOverall.map(r=>`<tr><td><b>${r.rank}</b></td><td>${esc(r.className)}</td><td>${esc(r.level)}</td><td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')}</tbody></table></div></div>`;
+      const classes=classNames();
+      const selectedClass=classes.includes(state.resultClassName)?state.resultClassName:(classes[0]||'');
+      const rows=g.byClass.filter(r=>r.className===selectedClass);
+      const classDetail=`<div class="results-split class-results-detail"><div class="results-list">${classes.map(cls=>`<button class="result-course ${cls===selectedClass?'selected':''}" data-view-result-class="${esc(cls)}"><strong>${esc(cls)}</strong><span>${g.byClass.filter(r=>r.className===cls).length}/${state.students.filter(s=>s.className===cls).length} classés</span></button>`).join('')||'<p class="empty">Aucune classe.</p>'}</div><div class="card table-card results-main"><div class="card-head"><div><h3>${selectedClass?`Élèves de ${esc(selectedClass)}`:'Classement par classe'}</h3><p>${rows.length} classés · filles et garçons</p></div><div class="result-actions"><button class="button" data-export-class="${esc(selectedClass)}" ${rows.length?'':'disabled'}>PDF classe</button><button class="button" data-export-class-excel="${esc(selectedClass)}" ${rows.length?'':'disabled'}>Excel classe</button></div></div>${rows.length?`<table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Sexe</th><th>Temps</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${r.sex==='F'?'Fille':r.sex==='M'?'Garçon':'—'}</td><td><b>${r.time}</b></td><td><button class="row-edit" data-edit-result="${r.studentId}">Modifier</button></td></tr>`).join('')}</tbody></table>`:'<p class="empty">Aucun élève classé pour cette classe.</p>'}</div></div>`;
+      content=classDetail+`<div class="results-two"><div class="card table-card"><h3>Classes par niveau</h3><table><thead><tr><th>Niveau</th><th>Rang</th><th>Classe</th><th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${g.classAverages.map(r=>`<tr><td>${esc(r.level)}</td><td><b>${r.rank}</b></td><td>${esc(r.className)}</td><td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')}</tbody></table></div><div class="card table-card"><h3>Collège</h3><table><thead><tr><th>Rang</th><th>Classe</th><th>Niveau</th><th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${g.classOverall.map(r=>`<tr><td><b>${r.rank}</b></td><td>${esc(r.className)}</td><td>${esc(r.level)}</td><td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')}</tbody></table></div></div>`;
     } else {
       content=`<div class="card table-card"><table><thead><tr><th>Rang</th><th>Professeur EPS</th><th>Classes</th><th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${g.teacherAverages.map(r=>`<tr><td><b>${r.rank}</b></td><td>${esc(r.teacher)}</td><td>${esc(r.classes.join(', '))}</td><td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')||'<tr><td colspan="5">Aucun professeur EPS renseigné.</td></tr>'}</tbody></table></div>`;
     }
@@ -540,6 +544,10 @@
     document.querySelectorAll('[data-result-mode]').forEach(b=>b.onclick=()=>{state.resultMode=b.dataset.resultMode;save();render();});
     $('#export-all-results')?.addEventListener('click',exportResultsPdf);
     $('#export-excel')?.addEventListener('click',exportExcel);
+    document.querySelectorAll('[data-view-result-class]').forEach(b=>b.onclick=()=>{state.resultClassName=b.dataset.viewResultClass;save();render();});
+    document.querySelectorAll('[data-export-class]').forEach(b=>b.onclick=()=>exportClassPdf(b.dataset.exportClass));
+    document.querySelectorAll('[data-export-class-excel]').forEach(b=>b.onclick=()=>exportScopedExcel('class',b.dataset.exportClassExcel));
+    document.querySelectorAll('[data-export-race-excel]').forEach(b=>b.onclick=()=>exportScopedExcel('race',b.dataset.exportRaceExcel));
     document.querySelectorAll('[data-view-race]').forEach(b=>b.onclick=()=>{state.resultRaceId=b.dataset.viewRace;save();render();});
     document.querySelectorAll('[data-export-race]').forEach(b=>b.onclick=()=>exportRacePdf(b.dataset.exportRace));
     document.querySelectorAll('[data-reopen-result]').forEach(b=>b.onclick=()=>reopenRace(b.dataset.reopenResult));
@@ -923,7 +931,7 @@
     [...indiv.entries()].sort().forEach(([k,a])=>{const[level,sex]=k.split('|');a.sort((x,y)=>x.elapsedMs-y.elapsedMs);a.forEach((s,i)=>individual.push({level,sex,rank:i+1,bib:s.bib,name:nameOf(s),className:s.className,time:fmt(s.elapsedMs)}));});
     state.races.forEach(r=>{ const a=finished.filter(s=>s.raceId===r.id).sort((x,y)=>x.elapsedMs-y.elapsedMs); a.forEach((s,i)=>byRace.push({raceId:r.id,raceName:r.name,studentId:s.id,rank:i+1,bib:s.bib,name:nameOf(s),className:s.className,time:fmt(s.elapsedMs),speed:fmtSpeed(s)})); });
     const classes=new Map(); finished.forEach(s=>{if(!classes.has(s.className)) classes.set(s.className,[]); classes.get(s.className).push(s);});
-    [...classes.entries()].sort().forEach(([className,a])=>{a.sort((x,y)=>x.elapsedMs-y.elapsedMs);a.forEach((s,i)=>byClass.push({className,rank:i+1,bib:s.bib,name:nameOf(s),sex:s.sex,time:fmt(s.elapsedMs)}));});
+    [...classes.entries()].sort().forEach(([className,a])=>{a.sort((x,y)=>x.elapsedMs-y.elapsedMs);a.forEach((s,i)=>byClass.push({className,studentId:s.id,rank:i+1,bib:s.bib,name:nameOf(s),sex:s.sex,time:fmt(s.elapsedMs)}));});
     const lc=new Map(); finished.forEach(s=>{const k=`${s.level}|${s.className}`; if(!lc.has(k)) lc.set(k,[]); lc.get(k).push(s);});
     const levels=new Map(); [...lc.entries()].forEach(([k,a])=>{const[level,className]=k.split('|'); if(!levels.has(level)) levels.set(level,[]); const enrolled=state.students.filter(s=>s.level===level&&s.className===className).length; levels.get(level).push({className,count:a.length,enrolled,averageMs:avg(a.map(s=>s.elapsedMs))});});
     [...levels.entries()].sort().forEach(([level,a])=>{a.sort((x,y)=>x.averageMs-y.averageMs);a.forEach((x,i)=>classAverages.push({level,rank:i+1,className:x.className,count:x.count,enrolled:x.enrolled,average:fmt(x.averageMs)}));});
@@ -969,6 +977,33 @@
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.text(`${state.crossDistanceM ? state.crossDistanceM+' m · ' : ''}${rows.length} classés`,14,25);
     doc.autoTable({head:[['Rang','Dossard','Élève','Classe','Temps','Vitesse moy.']],body:rows.map(r=>[r.rank,r.bib,r.name,r.className,r.time,r.speed]),startY:30,styles:{fontSize:9},headStyles:{fillColor:[15,23,42]}});
     doc.save(`resultats-${race.name.toLowerCase().replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'') || 'course'}.pdf`);
+  }
+
+  const resultFileName = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-|-$/g,'').toLowerCase() || 'classement';
+
+  function exportClassPdf(className) {
+    const rows=rankings().byClass.filter(r=>r.className===className);
+    if(!rows.length) return notify('Aucun résultat dans cette classe.','warning');
+    if(!window.jspdf?.jsPDF) return notify('Module PDF indisponible');
+    const doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
+    if(typeof doc.autoTable!=='function') return notify('Module tableau PDF indisponible');
+    doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.text(`Classe ${className}`,14,18);
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.text(`Cross 2026 · ${rows.length} élèves classés`,14,25);
+    doc.autoTable({head:[['Rang','Dossard','Élève','Sexe','Temps']],body:rows.map(r=>[r.rank,r.bib,r.name,r.sex==='F'?'Fille':r.sex==='M'?'Garçon':'—',r.time]),startY:30,styles:{fontSize:9},headStyles:{fillColor:[15,23,42]}});
+    doc.save(`resultats-classe-${resultFileName(className)}.pdf`);
+  }
+
+  function exportScopedExcel(kind,id) {
+    if(!window.XLSX) return notify('Module Excel indisponible');
+    const g=rankings(), isRace=kind==='race';
+    const rows=isRace?g.byRace.filter(r=>r.raceId===id):g.byClass.filter(r=>r.className===id);
+    if(!rows.length) return notify('Aucun résultat à exporter.','warning');
+    const label=isRace?raceOf(id)?.name:id;
+    const data=rows.map(r=>isRace?{Course:label,Rang:r.rank,Dossard:r.bib,Élève:r.name,Classe:r.className,Temps:r.time,'Vitesse moyenne':r.speed}:{Classe:label,Rang:r.rank,Dossard:r.bib,Élève:r.name,Sexe:r.sex,Temps:r.time});
+    const wb=XLSX.utils.book_new(), sheet=XLSX.utils.json_to_sheet(data);
+    sheet['!cols']=Object.keys(data[0]).map(key=>({wch:Math.max(key.length,...data.map(row=>String(row[key]??'').length))+2}));
+    XLSX.utils.book_append_sheet(wb,sheet,'Classement');
+    XLSX.writeFile(wb,`resultats-${isRace?'course':'classe'}-${resultFileName(label)}.xlsx`);
   }
 
   function saveSettings() {
@@ -1039,11 +1074,42 @@
       ctx.fill();
     }
 
+    drawMaisonCarree(ctx,sx,sy);
     bibBackgroundDataCache=canvas.toDataURL('image/png');
     // Libère immédiatement ~35 Mo de bitmap sur iPad ; le PNG en mémoire suffit ensuite.
     canvas.width=1;
     canvas.height=1;
     return bibBackgroundDataCache;
+  }
+
+  function drawMaisonCarree(ctx,sx,sy) {
+    ctx.save(); ctx.scale(sx,sy);
+    // Local replacement above the runners; no change to the title or central writing area.
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.moveTo(92,270); ctx.lineTo(205,260); ctx.lineTo(221,365); ctx.lineTo(92,345); ctx.closePath(); ctx.fill();
+    ctx.lineJoin='miter'; ctx.lineWidth=2.3; ctx.strokeStyle='#000';
+    // Pediment, six-column portico, side colonnade and raised podium.
+    ctx.fillStyle='#000';
+    ctx.beginPath(); ctx.moveTo(98,302); ctx.lineTo(148,275); ctx.lineTo(195,300); ctx.lineTo(215,307); ctx.lineTo(171,281); ctx.lineTo(148,275); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.moveTo(111,300); ctx.lineTo(148,281); ctx.lineTo(184,300); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#000'; ctx.fillRect(101,302,96,6);
+    ctx.beginPath(); ctx.moveTo(197,302); ctx.lineTo(216,309); ctx.lineTo(216,314); ctx.lineTo(197,308); ctx.closePath(); ctx.fill();
+    ctx.fillRect(110,313,77,29);
+    for(let i=0;i<6;i++) {
+      const x=105+i*16;
+      ctx.fillStyle='#fff'; ctx.fillRect(x,310,7,36); ctx.strokeRect(x,310,7,36);
+      ctx.fillStyle='#000'; ctx.fillRect(x-2,308,11,3); ctx.fillRect(x-2,344,11,3);
+      ctx.lineWidth=.7; ctx.beginPath(); ctx.moveTo(x+3,315); ctx.lineTo(x+3,340); ctx.stroke(); ctx.lineWidth=2.3;
+    }
+    for(let i=0;i<3;i++) {
+      const x=199+i*6,y=311+i*2;
+      ctx.fillStyle='#fff'; ctx.fillRect(x,y,3,34); ctx.strokeRect(x,y,3,34);
+    }
+    ctx.fillStyle='#000';
+    ctx.beginPath(); ctx.moveTo(99,348); ctx.lineTo(194,348); ctx.lineTo(218,355); ctx.lineTo(218,360); ctx.lineTo(96,354); ctx.closePath(); ctx.fill();
+    ctx.fillRect(94,356,103,3); ctx.fillRect(89,362,113,3);
+    ctx.restore();
   }
 
   function drawVectorBarcode(doc,value,x,y,w,h) {
@@ -1163,7 +1229,7 @@
         if(i) doc.addPage('a4','landscape');
 
         doc.addImage(backgroundData,'PNG',0,0,W,H,'bibBackgroundHD','FAST');
-        drawVectorBarcode(doc,String(s.bib),98,58,101,17);
+        drawVectorBarcode(doc,String(s.bib),98,65,101,17);
 
         const bib=String(s.bib);
         const bibSize=fitPdfText(doc,bib,112,150,82,'helvetica','bold');
@@ -1281,13 +1347,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v30')){
-          sessionStorage.setItem('cross-browser-clean-v27','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v31')){
+          sessionStorage.setItem('cross-browser-clean-v31','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=30',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=31',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
