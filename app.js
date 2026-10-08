@@ -148,7 +148,7 @@
     const tabs = [['students','1. Préparation'],['races','2. Courses'],['timing','3. Jour J'],['results','4. Résultats']];
     app.innerHTML = `<div class="app-shell">
       <header class="topbar">
-        <div class="brand"><img src="./icon-180.png" alt=""><div><h1>Cross Ada Lovelace</h1><p>${state.students.length} élèves · ${classNames().length} classes · ${state.races.length} courses</p></div></div>
+        <div class="brand"><img src="./icon-180.png?v=13" alt="Logo CROSS"><div><span class="brand-kicker">COLLÈGE ADA LOVELACE · NÎMES</span><h1>CROSS 2026</h1><p>${state.students.length} élèves · ${classNames().length} classes · ${state.races.length} courses</p></div></div>
         <div id="sync-badge" class="sync-badge"></div>
       </header>
       <nav class="tabs">${tabs.map(([id,label]) => `<button data-tab="${id}" class="${state.tab===id?'active':''}">${label}</button>`).join('')}</nav>
