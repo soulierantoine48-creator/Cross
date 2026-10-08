@@ -297,7 +297,7 @@
         <div class="start-command-copy"><span class="eyebrow">DÉPART</span><h2>${armed?esc(armed.name):upcoming.length?'Préparer la prochaine course':'Tous les départs sont lancés'}</h2><p>${armed?'Au signal, un seul appui enregistre l’heure exacte du départ.':upcoming.length?'Choisis d’abord la course. Tu peux le faire pendant qu’une autre course est déjà en cours.':'La zone arrivée est maintenant prioritaire.'}</p></div>
         ${armed ? `<div class="armed-actions"><button class="launch-race" id="launch-armed"><span>DÉPART</span><strong>${esc(armed.name)}</strong></button><button class="text-button" id="cancel-armed">Changer</button></div>`
         : upcoming.length ? `<div class="prepare-races">${upcoming.map(r=>{const n=state.students.filter(s=>s.raceId===r.id).length;return `<button data-arm-race="${r.id}"><strong>${esc(r.name)}</strong><span>${n} élèves</span><em>Préparer</em></button>`;}).join('')}</div>`
-        : '<div class="all-started"><strong>Tous les départs sont lancés</strong><span>Concentre-toi maintenant sur les arrivées.</span></div>'}
+        : '<div class="all-started"><strong>✓ Départs terminés</strong><span>Aucune course à préparer.</span></div>'}
       </div>
 
       <div class="day-layout">
