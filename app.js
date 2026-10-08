@@ -862,12 +862,23 @@
     const s=state.students.find(x=>x.id===id);
     if(!s||manualStamp===null) return;
     const stamp=manualStamp;
-    manualStamp=null;
+    if(!Array.isArray(state.manualPending)) state.manualPending=[];
+    if(state.manualPending[0]===stamp) state.manualPending.shift();
+    manualStamp=state.manualPending.length?state.manualPending[0]:null;
     manualQuery='';
     finish(s,stamp,'manual');
   }
 
-  function closeManual(){ manualStamp=null; manualQuery=''; render(); }
+  function closeManual(){
+    manualStamp=null;
+    manualQuery='';
+    if(Array.isArray(state.manualPending)&&state.manualPending.length){
+      state.notice=state.manualPending.length+' temps sans dossard en attente';
+      state.noticeKind='warning';
+      save();
+    }
+    render();
+  }
 
   function undoLast() {
     const a=state.arrivals.at(-1);
