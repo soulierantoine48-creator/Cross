@@ -22,6 +22,9 @@
   let scanStartedAt = 0;
   let armedRaceId = '';
   let manualSearchTimer = null;
+  let finishConfirmRaceId = '';
+  let resultEditStudentId = '';
+  let deleteFinishedRaceId = '';
   let openClass = '';
   let studentEditorId = null;
   let studentSearch = '';
@@ -174,6 +177,9 @@
       ${openClass ? classModal() : ''}
       ${studentEditorId !== null ? studentModal() : ''}
       ${manualStamp !== null ? manualModal() : ''}
+      ${finishConfirmRaceId ? finishRaceModal() : ''}
+      ${resultEditStudentId ? resultEditModal() : ''}
+      ${deleteFinishedRaceId ? deleteFinishedRaceModal() : ''}
     </div>`;
     bind();
     updateSyncBadge();
@@ -322,7 +328,7 @@
     let content='';
     if(mode==='courses'){
       content=`<div class="results-split"><div class="results-list">${ended.map(r=>{const rr=state.students.filter(s=>s.raceId===r.id), n=rr.filter(s=>s.elapsedMs!=null).length;return `<button class="result-course ${r.id===selectedRaceId?'selected':''}" data-view-race="${r.id}"><strong>${esc(r.name)}</strong><span>${n}/${rr.length} classés</span></button>`;}).join('')||'<p class="empty">Aucune course terminée.</p>'}</div>
-        <div class="card table-card results-main" id="race-results-panel">${selectedRace?`<div class="card-head"><div><h3>${esc(selectedRace.name)}</h3><p>${raceRows.length} classés</p></div><button class="button" data-export-race="${selectedRace.id}">Exporter PDF</button></div>${raceRows.length?`<table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th><th>Vitesse</th></tr></thead><tbody>${raceRows.map(r=>`<tr><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td><b>${r.time}</b></td><td>${r.speed}</td></tr>`).join('')}</tbody></table>`:'<p class="empty">Aucune arrivée.</p>'}`:'<p class="empty">Sélectionne une course.</p>'}</div></div>`;
+        <div class="card table-card results-main" id="race-results-panel">${selectedRace?`<div class="card-head"><div><h3>${esc(selectedRace.name)}</h3><p>${raceRows.length} classés</p></div><div class="result-actions"><button class="button" data-reopen-result="${selectedRace.id}">Réouvrir</button><button class="button danger-ghost" data-delete-finished="${selectedRace.id}">Supprimer la course</button><button class="button" data-export-race="${selectedRace.id}">Exporter PDF</button></div></div>${raceRows.length?`<table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th><th>Vitesse</th><th></th></tr></thead><tbody>${raceRows.map(r=>`<tr><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td><b>${r.time}</b></td><td>${r.speed}</td><td><button class="row-edit" data-edit-result="${r.studentId}">Modifier</button></td></tr>`).join('')}</tbody></table>`:'<p class="empty">Aucune arrivée.</p>'}`:'<p class="empty">Sélectionne une course.</p>'}</div></div>`;
     } else if(mode==='individual'){
       content=`<div class="card table-card"><table><thead><tr><th>Niveau</th><th>Sexe</th><th>Rang</th><th>Dossard</th><th>Élève</th><th>Classe</th><th>Temps</th></tr></thead><tbody>${g.individual.map(r=>`<tr><td>${esc(r.level)}</td><td>${esc(r.sex)}</td><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td><b>${r.time}</b></td></tr>`).join('')}</tbody></table></div>`;
     } else if(mode==='classes'){
@@ -366,6 +372,47 @@
     </div></div>`;
   }
 
+  function finishRaceModal() {
+    const r=raceOf(finishConfirmRaceId);
+    if(!r) return '';
+    const runners=state.students.filter(s=>s.raceId===r.id);
+    const missing=runners.filter(s=>s.elapsedMs==null);
+    const arrived=runners.length-missing.length;
+    const shortList=missing.length && missing.length<=5 ? `<div class="missing-names">${missing.map(s=>`<span>#${esc(s.bib)} · ${esc(nameOf(s))}</span>`).join('')}</div>` : '';
+    return `<div class="modal-backdrop"><div class="modal confirm-modal finish-course-modal">
+      <div class="modal-head"><div><span class="eyebrow">FIN DE COURSE</span><h2>Terminer ${esc(r.name)} ?</h2><p>Vérifie le bilan avant de fermer définitivement la course.</p></div><button class="close" id="close-finish-modal">×</button></div>
+      <div class="finish-summary"><div class="finish-ok"><strong>${arrived}</strong><span>arrivés</span></div><div class="${missing.length?'finish-missing':'finish-ok'}"><strong>${missing.length}</strong><span>sans arrivée</span></div><div><strong>${runners.length}</strong><span>inscrits</span></div></div>
+      ${missing.length ? `<div class="finish-warning"><strong>${missing.length} élève${missing.length>1?'s':''} sans arrivée</strong><p>Tu pourras toujours réouvrir la course ensuite si un résultat manque ou doit être ajouté.</p>${shortList}</div>` : '<div class="finish-success">✓ Tous les élèves ont une arrivée enregistrée.</div>'}
+      <div class="modal-actions"><button class="button" id="cancel-finish-race">Annuler</button><button class="button danger-solid" id="confirm-finish-race">Terminer la course</button></div>
+    </div></div>`;
+  }
+
+  function resultEditModal() {
+    const s=state.students.find(x=>x.id===resultEditStudentId);
+    if(!s || s.elapsedMs==null) return '';
+    const r=raceOf(s.raceId);
+    const totalSec=Math.max(0,Math.round(s.elapsedMs/1000));
+    const min=Math.floor(totalSec/60), sec=totalSec%60;
+    return `<div class="modal-backdrop"><div class="modal result-edit-modal">
+      <div class="modal-head"><div><span class="eyebrow">CORRIGER UN RÉSULTAT</span><h2>#${esc(s.bib)} · ${esc(nameOf(s))}</h2><p>${esc(r?.name||'')} · temps actuel ${fmt(s.elapsedMs)}</p></div><button class="close" id="close-result-edit">×</button></div>
+      <div class="time-editor"><label>Minutes<input id="result-minutes" type="number" min="0" inputmode="numeric" value="${min}"></label><span>:</span><label>Secondes<input id="result-seconds" type="number" min="0" max="59" inputmode="numeric" value="${String(sec).padStart(2,'0')}"></label></div>
+      <p class="edit-help">Le classement, la vitesse moyenne et les moyennes de classe/prof seront recalculés automatiquement.</p>
+      <div class="modal-actions split-actions"><button class="button danger-ghost" id="delete-result">Supprimer ce résultat</button><div><button class="button" id="cancel-result-edit">Annuler</button><button class="button primary" id="save-result-edit">Enregistrer</button></div></div>
+    </div></div>`;
+  }
+
+  function deleteFinishedRaceModal() {
+    const r=raceOf(deleteFinishedRaceId);
+    if(!r) return '';
+    const runners=state.students.filter(s=>s.raceId===r.id);
+    const finished=runners.filter(s=>s.elapsedMs!=null).length;
+    return `<div class="modal-backdrop"><div class="modal confirm-modal delete-race-modal">
+      <div class="modal-head"><div><span class="eyebrow">SUPPRESSION</span><h2>Supprimer ${esc(r.name)} ?</h2><p>Cette action supprimera la course et ses résultats.</p></div><button class="close" id="close-delete-race">×</button></div>
+      <div class="delete-warning"><strong>${finished} chrono${finished>1?'s':''} seront supprimés</strong><p>Les ${runners.length} élèves resteront dans la liste et redeviendront disponibles pour recréer une course.</p></div>
+      <div class="modal-actions"><button class="button" id="cancel-delete-race">Annuler</button><button class="button danger-solid" id="confirm-delete-race">Supprimer définitivement</button></div>
+    </div></div>`;
+  }
+
   function bind() {
     document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;save();render();});
     $('#student-file')?.addEventListener('change',e=>importStudents(e.target.files?.[0]));
@@ -397,7 +444,10 @@
     document.querySelectorAll('[data-arm-race]').forEach(b=>b.onclick=()=>{armedRaceId=b.dataset.armRace;render();});
     $('#cancel-armed')?.addEventListener('click',()=>{armedRaceId='';render();});
     $('#launch-armed')?.addEventListener('click',()=>{if(armedRaceId) startRace(armedRaceId);});
-    document.querySelectorAll('[data-finish-race]').forEach(b=>b.onclick=()=>finishRace(b.dataset.finishRace));
+    document.querySelectorAll('[data-finish-race]').forEach(b=>b.onclick=()=>{finishConfirmRaceId=b.dataset.finishRace;render();});
+    $('#close-finish-modal')?.addEventListener('click',()=>{finishConfirmRaceId='';render();});
+    $('#cancel-finish-race')?.addEventListener('click',()=>{finishConfirmRaceId='';render();});
+    $('#confirm-finish-race')?.addEventListener('click',confirmFinishRace);
     document.querySelectorAll('[data-reopen]').forEach(b=>b.onclick=()=>reopenRace(b.dataset.reopen));
     $('#save-settings')?.addEventListener('click',saveSettings);
 
@@ -421,6 +471,16 @@
     $('#export-excel')?.addEventListener('click',exportExcel);
     document.querySelectorAll('[data-view-race]').forEach(b=>b.onclick=()=>{state.resultRaceId=b.dataset.viewRace;save();render();});
     document.querySelectorAll('[data-export-race]').forEach(b=>b.onclick=()=>exportRacePdf(b.dataset.exportRace));
+    document.querySelectorAll('[data-reopen-result]').forEach(b=>b.onclick=()=>reopenRace(b.dataset.reopenResult));
+    document.querySelectorAll('[data-edit-result]').forEach(b=>b.onclick=()=>{resultEditStudentId=b.dataset.editResult;render();});
+    $('#close-result-edit')?.addEventListener('click',()=>{resultEditStudentId='';render();});
+    $('#cancel-result-edit')?.addEventListener('click',()=>{resultEditStudentId='';render();});
+    $('#save-result-edit')?.addEventListener('click',saveResultEdit);
+    $('#delete-result')?.addEventListener('click',deleteResult);
+    document.querySelectorAll('[data-delete-finished]').forEach(b=>b.onclick=()=>{deleteFinishedRaceId=b.dataset.deleteFinished;render();});
+    $('#close-delete-race')?.addEventListener('click',()=>{deleteFinishedRaceId='';render();});
+    $('#cancel-delete-race')?.addEventListener('click',()=>{deleteFinishedRaceId='';render();});
+    $('#confirm-delete-race')?.addEventListener('click',confirmDeleteFinishedRace);
 
     updateRaceCount();
   }
@@ -577,15 +637,14 @@
     save(); render();
   }
 
-  function finishRace(id) {
+  function confirmFinishRace() {
+    const id=finishConfirmRaceId;
     const r=raceOf(id);
-    if(!r?.startedAt||r.endedAt) return;
+    if(!r?.startedAt||r.endedAt){ finishConfirmRaceId=''; return render(); }
     const runners=state.students.filter(s=>s.raceId===id);
     const missing=runners.filter(s=>s.elapsedMs==null);
-    const names=missing.slice(0,8).map(s=>nameOf(s)).join(', ');
-    const detail=missing.length ? `\n\nSans arrivée : ${names}${missing.length>8?'…':''}` : '';
-    if(!confirm(`${r.name} : ${runners.length-missing.length}/${runners.length} arrivés.\nTerminer la course ?${detail}`)) return;
     r.endedAt=Date.now();
+    finishConfirmRaceId='';
     state.notice=`${r.name} terminée · ${runners.length-missing.length}/${runners.length} classés`;
     state.noticeKind='good';
     save(); render();
@@ -597,6 +656,65 @@
     if(!confirm(`Réouvrir « ${r.name} » ? L’heure de départ et les chronos existants restent inchangés.`)) return;
     delete r.endedAt;
     state.notice=`${r.name} réouverte`; state.noticeKind='warning';
+    save(); render();
+  }
+
+  function saveResultEdit() {
+    const s=state.students.find(x=>x.id===resultEditStudentId);
+    const r=s ? raceOf(s.raceId) : null;
+    if(!s||!r?.startedAt) return;
+    const min=Number($('#result-minutes')?.value);
+    const sec=Number($('#result-seconds')?.value);
+    if(!Number.isInteger(min)||min<0||!Number.isInteger(sec)||sec<0||sec>59) return notify('Temps invalide. Utilise des minutes et des secondes entre 0 et 59.','error');
+    const elapsedMs=(min*60+sec)*1000;
+    if(elapsedMs<=0) return notify('Le temps doit être supérieur à 0 seconde.','error');
+    const stamp=r.startedAt+elapsedMs;
+    s.elapsedMs=elapsedMs;
+    s.finishedAt=stamp;
+    const arrival=state.arrivals.slice().reverse().find(a=>a.studentId===s.id&&a.raceId===r.id);
+    if(arrival){
+      arrival.elapsedMs=elapsedMs;
+      arrival.stamp=stamp;
+      arrival.method='corrected';
+    } else {
+      state.arrivals.push({id:uid(),studentId:s.id,raceId:r.id,stamp,elapsedMs,method:'corrected'});
+    }
+    state.notice=`Résultat corrigé · #${s.bib} ${nameOf(s)} · ${fmt(elapsedMs)}`;
+    state.noticeKind='good';
+    resultEditStudentId='';
+    save(); render();
+  }
+
+  function deleteResult() {
+    const s=state.students.find(x=>x.id===resultEditStudentId);
+    if(!s) return;
+    const raceId=s.raceId;
+    delete s.elapsedMs;
+    delete s.finishedAt;
+    state.arrivals=state.arrivals.filter(a=>!(a.studentId===s.id&&a.raceId===raceId));
+    state.notice=`Résultat supprimé · #${s.bib} ${nameOf(s)}`;
+    state.noticeKind='warning';
+    resultEditStudentId='';
+    save(); render();
+  }
+
+  function confirmDeleteFinishedRace() {
+    const id=deleteFinishedRaceId;
+    const r=raceOf(id);
+    if(!r){ deleteFinishedRaceId=''; return render(); }
+    state.students.forEach(s=>{
+      if(s.raceId===id){
+        delete s.raceId;
+        delete s.elapsedMs;
+        delete s.finishedAt;
+      }
+    });
+    state.arrivals=state.arrivals.filter(a=>a.raceId!==id);
+    state.races=state.races.filter(x=>x.id!==id);
+    if(state.resultRaceId===id) state.resultRaceId='';
+    deleteFinishedRaceId='';
+    state.notice=`${r.name} supprimée · élèves de nouveau disponibles`;
+    state.noticeKind='warning';
     save(); render();
   }
 
@@ -664,7 +782,7 @@
     const finished=state.students.filter(s=>s.elapsedMs!=null), individual=[], byRace=[], byClass=[], classAverages=[], classOverall=[], teacherAverages=[];
     const indiv=new Map(); finished.forEach(s=>{const k=`${s.level}|${s.sex}`; if(!indiv.has(k)) indiv.set(k,[]); indiv.get(k).push(s);});
     [...indiv.entries()].sort().forEach(([k,a])=>{const[level,sex]=k.split('|');a.sort((x,y)=>x.elapsedMs-y.elapsedMs);a.forEach((s,i)=>individual.push({level,sex,rank:i+1,bib:s.bib,name:nameOf(s),className:s.className,time:fmt(s.elapsedMs)}));});
-    state.races.forEach(r=>{ const a=finished.filter(s=>s.raceId===r.id).sort((x,y)=>x.elapsedMs-y.elapsedMs); a.forEach((s,i)=>byRace.push({raceId:r.id,raceName:r.name,rank:i+1,bib:s.bib,name:nameOf(s),className:s.className,time:fmt(s.elapsedMs),speed:fmtSpeed(s)})); });
+    state.races.forEach(r=>{ const a=finished.filter(s=>s.raceId===r.id).sort((x,y)=>x.elapsedMs-y.elapsedMs); a.forEach((s,i)=>byRace.push({raceId:r.id,raceName:r.name,studentId:s.id,rank:i+1,bib:s.bib,name:nameOf(s),className:s.className,time:fmt(s.elapsedMs),speed:fmtSpeed(s)})); });
     const classes=new Map(); finished.forEach(s=>{if(!classes.has(s.className)) classes.set(s.className,[]); classes.get(s.className).push(s);});
     [...classes.entries()].sort().forEach(([className,a])=>{a.sort((x,y)=>x.elapsedMs-y.elapsedMs);a.forEach((s,i)=>byClass.push({className,rank:i+1,bib:s.bib,name:nameOf(s),sex:s.sex,time:fmt(s.elapsedMs)}));});
     const lc=new Map(); finished.forEach(s=>{const k=`${s.level}|${s.className}`; if(!lc.has(k)) lc.set(k,[]); lc.get(k).push(s);});
@@ -979,13 +1097,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v21')){
-          sessionStorage.setItem('cross-browser-clean-v21','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v22')){
+          sessionStorage.setItem('cross-browser-clean-v22','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=21',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=22',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
