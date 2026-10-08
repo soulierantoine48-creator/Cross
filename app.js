@@ -397,7 +397,8 @@
     }).filter(g=>g.students.length);
     const pending=activeRaces.reduce((n,r)=>n+state.students.filter(s=>s.raceId===r.id&&s.elapsedMs==null).length,0);
 
-    return `<div class="modal-backdrop manual-backdrop"><div class="modal manual-modal"><div class="modal-head"><div><span class="eyebrow">TEMPS FIGÉ</span><h2>Sans dossard</h2><p>${new Date(manualStamp).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})} · ${activeRaces.length} course${activeRaces.length>1?'s':''} active${activeRaces.length>1?'s':''} · ${pending} élèves encore en course</p><p>Le scanner reste actif en arrière-plan.</p></div><button class="close" id="close-modal">×</button></div>
+    return `<div class="modal-backdrop manual-backdrop"><div class="modal manual-modal"><div class="modal-head"><div><span class="eyebrow">TEMPS FIGÉ</span><h2>Sans dossard</h2><p>${new Date(manualStamp).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})} · ${activeRaces.length} course${activeRaces.length>1?'s':''} active${activeRaces.length>1?'s':''} · ${pending} élèves encore en course</p><p>Le scanner reste actif en arrière-plan. ${state.manualPending?.length>1?state.manualPending.length+' temps sans dossard sont en attente.':''}</p></div><button class="close" id="close-modal">×</button></div>
+      <button class="button queue-no-bib" id="queue-no-bib">+ Figer un autre temps sans dossard maintenant</button>
       <input class="manual-search" id="manual-search" value="${esc(manualQuery)}" placeholder="Nom, classe, dossard ou course">
       <div class="candidate-list manual-groups">${groups.map(g=>`
         <section class="manual-race-group">
