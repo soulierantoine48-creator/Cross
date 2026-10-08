@@ -373,10 +373,28 @@
 
   function manualModal() {
     const q=manualQuery.trim().toLowerCase();
-    const candidates=state.students.filter(s=>s.elapsedMs==null&&s.raceId&&raceOf(s.raceId)?.startedAt&&!raceOf(s.raceId)?.endedAt&&(!q||String(s.bib||'').includes(q)||nameOf(s).toLowerCase().includes(q)||String(s.className).toLowerCase().includes(q))).slice(0,30);
-    return `<div class="modal-backdrop manual-backdrop"><div class="modal manual-modal"><div class="modal-head"><div><span class="eyebrow">TEMPS FIGÉ</span><h2>Sans dossard</h2><p>${new Date(manualStamp).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})} · le scanner reste actif en arrière-plan</p></div><button class="close" id="close-modal">×</button></div>
-      <input class="manual-search" id="manual-search" value="${esc(manualQuery)}" placeholder="Nom, classe ou dossard">
-      <div class="candidate-list">${candidates.map(s=>`<button data-manual="${s.id}"><strong>#${esc(s.bib||'—')}</strong><span>${esc(nameOf(s))} · ${esc(s.className)}</span><small>${esc(raceOf(s.raceId)?.name||'')}</small></button>`).join('')||'<p class="empty">Tape un nom ou une classe.</p>'}</div>
+    const activeRaces=state.races.filter(r=>r.startedAt&&!r.endedAt).sort((a,b)=>a.startedAt-b.startedAt);
+    const groups=activeRaces.map(r=>{
+      const students=state.students
+        .filter(s=>s.raceId===r.id&&s.elapsedMs==null&&(
+          !q ||
+          String(s.bib||'').includes(q) ||
+          nameOf(s).toLowerCase().includes(q) ||
+          String(s.className||'').toLowerCase().includes(q) ||
+          String(r.name||'').toLowerCase().includes(q)
+        ))
+        .sort((a,b)=>Number(a.bib||0)-Number(b.bib||0)||nameOf(a).localeCompare(nameOf(b),'fr'));
+      return {race:r,students};
+    }).filter(g=>g.students.length);
+    const pending=activeRaces.reduce((n,r)=>n+state.students.filter(s=>s.raceId===r.id&&s.elapsedMs==null).length,0);
+
+    return `<div class="modal-backdrop manual-backdrop"><div class="modal manual-modal"><div class="modal-head"><div><span class="eyebrow">TEMPS FIGÉ</span><h2>Sans dossard</h2><p>${new Date(manualStamp).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})} · ${activeRaces.length} course${activeRaces.length>1?'s':''} active${activeRaces.length>1?'s':''} · ${pending} élèves encore en course</p><p>Le scanner reste actif en arrière-plan.</p></div><button class="close" id="close-modal">×</button></div>
+      <input class="manual-search" id="manual-search" value="${esc(manualQuery)}" placeholder="Nom, classe, dossard ou course">
+      <div class="candidate-list manual-groups">${groups.map(g=>`
+        <section class="manual-race-group">
+          <div class="manual-race-title"><strong>${esc(g.race.name)}</strong><span>${g.students.length} élève${g.students.length>1?'s':''}</span></div>
+          ${g.students.map(s=>`<button data-manual="${s.id}"><strong>#${esc(s.bib||'—')}</strong><span>${esc(nameOf(s))} · ${esc(s.className)}</span><small>${esc(g.race.name)}</small></button>`).join('')}
+        </section>`).join('') || '<p class="empty">Aucun élève correspondant dans les courses actives.</p>'}</div>
     </div></div>`;
   }
 
@@ -1116,13 +1134,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v23')){
-          sessionStorage.setItem('cross-browser-clean-v23','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v24')){
+          sessionStorage.setItem('cross-browser-clean-v24','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=23',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=24',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
