@@ -1,5 +1,4 @@
 {
-  "id": "/",
   "name": "CROSS 2026 · Collège Ada Lovelace",
   "short_name": "CROSS",
   "start_url": "/",
@@ -10,7 +9,7 @@
   "description": "Gestion, chronométrage et classements du cross du collège Ada Lovelace",
   "icons": [
     {
-      "src": "/cross-touch-v4.png",
+      "src": "/icon-180.png?v=19",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
