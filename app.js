@@ -933,7 +933,19 @@
   window.addEventListener('offline',()=>{syncStatus='offline';updateSyncBadge();});
   setInterval(()=>{if(syncPending) syncCloud();},15000);
 
-  if('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+  if('serviceWorker' in navigator) window.addEventListener('load', async () => {
+    try{
+      let reloading=false;
+      navigator.serviceWorker.addEventListener('controllerchange',()=>{
+        if(reloading||sessionStorage.getItem('cross-sw17-reloaded')) return;
+        reloading=true;
+        sessionStorage.setItem('cross-sw17-reloaded','1');
+        location.reload();
+      });
+      const reg=await navigator.serviceWorker.register('/sw.js?v=17',{updateViaCache:'none'});
+      await reg.update();
+    }catch(_){}
+  });
   render();
   scheduleCloudSync(250);
 })();
