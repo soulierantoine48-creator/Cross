@@ -148,7 +148,7 @@
     const tabs = [['students','1. Préparation'],['races','2. Courses'],['timing','3. Jour J'],['results','4. Résultats']];
     app.innerHTML = `<div class="app-shell">
       <header class="topbar">
-        <div class="brand"><img src="./cross-touch-v3.png" alt="Logo CROSS"><div><span class="brand-kicker">COLLÈGE ADA LOVELACE · NÎMES</span><h1>CROSS 2026</h1><p>${state.students.length} élèves · ${classNames().length} classes · ${state.races.length} courses</p></div></div>
+        <div class="brand"><img src="./cross-touch-v4.png" alt="Logo CROSS"><div><span class="brand-kicker">COLLÈGE ADA LOVELACE · NÎMES</span><h1>CROSS 2026</h1><p>${state.students.length} élèves · ${classNames().length} classes · ${state.races.length} courses</p></div></div>
         <div id="sync-badge" class="sync-badge"></div>
       </header>
       <nav class="tabs">${tabs.map(([id,label]) => `<button data-tab="${id}" class="${state.tab===id?'active':''}">${label}</button>`).join('')}</nav>
@@ -944,13 +944,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v18')){
-          sessionStorage.setItem('cross-browser-clean-v18','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v19')){
+          sessionStorage.setItem('cross-browser-clean-v19','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=18',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=19',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
