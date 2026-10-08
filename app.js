@@ -351,14 +351,19 @@
       const selectedClass=classes.includes(state.resultClassName)?state.resultClassName:(classes[0]||'');
       const rows=g.byClass.filter(r=>r.className===selectedClass);
       const classDetail=`<div class="results-split class-results-detail"><div class="results-list">${classes.map(cls=>`<button class="result-course ${cls===selectedClass?'selected':''}" data-view-result-class="${esc(cls)}"><strong>${esc(cls)}</strong><span>${g.byClass.filter(r=>r.className===cls).length}/${state.students.filter(s=>s.className===cls).length} classés</span></button>`).join('')||'<p class="empty">Aucune classe.</p>'}</div><div class="card table-card results-main"><div class="card-head"><div><h3>${selectedClass?`Élèves de ${esc(selectedClass)}`:'Classement par classe'}</h3><p>${rows.length} classés · filles et garçons</p></div><div class="result-actions"><button class="button" data-export-class="${esc(selectedClass)}" ${rows.length?'':'disabled'}>PDF classe</button><button class="button" data-export-class-excel="${esc(selectedClass)}" ${rows.length?'':'disabled'}>Excel classe</button></div></div>${rows.length?`<table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Sexe</th><th>Temps</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${r.sex==='F'?'Fille':r.sex==='M'?'Garçon':'—'}</td><td><b>${r.time}</b></td><td><button class="row-edit" data-edit-result="${r.studentId}">Modifier</button></td></tr>`).join('')}</tbody></table>`:'<p class="empty">Aucun élève classé pour cette classe.</p>'}</div></div>`;
-      content=classDetail+`<div class="results-two"><div class="card table-card"><h3>Classes par niveau</h3><table><thead><tr><th>Niveau</th><th>Rang</th><th>Classe</th><th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${g.classAverages.map(r=>`<tr><td>${esc(r.level)}</td><td><b>${r.rank}</b></td><td>${esc(r.className)}</td><td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')}</tbody></table></div><div class="card table-card"><h3>Collège</h3><table><thead><tr><th>Rang</th><th>Classe</th><th>Niveau</th><th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${g.classOverall.map(r=>`<tr><td><b>${r.rank}</b></td><td>${esc(r.className)}</td><td>${esc(r.level)}</td><td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')}</tbody></table></div></div>`;
+      content=classDetail;
+    } else if(mode==='college'){
+      const rowsTable=(rows,overall=false)=>`<table><thead><tr><th>Rang</th><th>Classe</th>${overall?'<th>Niveau</th>':''}<th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${r.rank}</b></td><td>${esc(r.className)}</td>${overall?`<td>${esc(r.level)}</td>`:''}<td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')||`<tr><td colspan="${overall?5:4}">Aucune classe avec un résultat.</td></tr>`}</tbody></table>`;
+      const levels=['6e','5e','4e','3e'];
+      const extraLevels=[...new Set(state.students.map(s=>s.level).filter(level=>level&&!levels.includes(level)))].sort();
+      content=`<div class="card table-card college-overall"><h3>Classement des classes du collège</h3><p class="comparison-help">Classes classées selon le temps moyen de leurs élèves arrivés.</p>${rowsTable(g.classOverall,true)}</div><div class="college-level-grid">${[...levels,...extraLevels].map(level=>`<div class="card table-card college-level-card ${levelTone(level)}"><h3>Classes de ${esc(level)}</h3>${rowsTable(g.classAverages.filter(r=>r.level===level))}</div>`).join('')}</div>`;
     } else {
       content=`<div class="card table-card"><table><thead><tr><th>Rang</th><th>Professeur EPS</th><th>Classes</th><th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${g.teacherAverages.map(r=>`<tr><td><b>${r.rank}</b></td><td>${esc(r.teacher)}</td><td>${esc(r.classes.join(', '))}</td><td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')||'<tr><td colspan="5">Aucun professeur EPS renseigné.</td></tr>'}</tbody></table></div>`;
     }
 
     return `<section class="results-page">
       <div class="hero-card results-hero"><div><span class="eyebrow">RÉSULTATS</span><h2>${done} élèves classés</h2><p>${ended.length} course${ended.length>1?'s':''} terminée${ended.length>1?'s':''}</p></div><div class="actions"><button class="button" id="export-excel" ${done?'':'disabled'}>Excel</button><button class="button primary" id="export-all-results" ${done?'':'disabled'}>PDF complet</button></div></div>
-      <div class="result-tabs"><button data-result-mode="courses" class="${mode==='courses'?'active':''}">Courses</button><button data-result-mode="individual" class="${mode==='individual'?'active':''}">Individuels</button><button data-result-mode="classes" class="${mode==='classes'?'active':''}">Classes</button><button data-result-mode="teachers" class="${mode==='teachers'?'active':''}">Professeurs</button></div>
+      <div class="result-tabs"><button data-result-mode="courses" class="${mode==='courses'?'active':''}">Courses</button><button data-result-mode="individual" class="${mode==='individual'?'active':''}">Individuels</button><button data-result-mode="classes" class="${mode==='classes'?'active':''}">Classes</button><button data-result-mode="college" class="${mode==='college'?'active':''}">Collège</button><button data-result-mode="teachers" class="${mode==='teachers'?'active':''}">Professeurs</button></div>
       ${content}
     </section>`;
   }
@@ -1075,6 +1080,9 @@
     }
 
     drawMaisonCarree(ctx,sx,sy);
+    // Supprime les chiffres du fond : l'année est écrite en texte PDF net et complet.
+    ctx.fillStyle='#fff';
+    ctx.fillRect(675*sx,214*sy,165*sx,40*sy);
     bibBackgroundDataCache=canvas.toDataURL('image/png');
     // Libère immédiatement ~35 Mo de bitmap sur iPad ; le PNG en mémoire suffit ensuite.
     canvas.width=1;
@@ -1084,31 +1092,46 @@
 
   function drawMaisonCarree(ctx,sx,sy) {
     ctx.save(); ctx.scale(sx,sy);
-    // Local replacement above the runners; no change to the title or central writing area.
-    ctx.fillStyle='#fff';
-    ctx.beginPath(); ctx.moveTo(92,270); ctx.lineTo(205,260); ctx.lineTo(221,365); ctx.lineTo(92,345); ctx.closePath(); ctx.fill();
-    ctx.lineJoin='miter'; ctx.lineWidth=2.3; ctx.strokeStyle='#000';
-    // Pediment, six-column portico, side colonnade and raised podium.
-    ctx.fillStyle='#000';
-    ctx.beginPath(); ctx.moveTo(98,302); ctx.lineTo(148,275); ctx.lineTo(195,300); ctx.lineTo(215,307); ctx.lineTo(171,281); ctx.lineTo(148,275); ctx.closePath(); ctx.fill();
-    ctx.fillStyle='#fff';
-    ctx.beginPath(); ctx.moveTo(111,300); ctx.lineTo(148,281); ctx.lineTo(184,300); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle='#000'; ctx.fillRect(101,302,96,6);
-    ctx.beginPath(); ctx.moveTo(197,302); ctx.lineTo(216,309); ctx.lineTo(216,314); ctx.lineTo(197,308); ctx.closePath(); ctx.fill();
-    ctx.fillRect(110,313,77,29);
+    const polygon=(points,color='#000')=>{
+      ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(...points[0]);
+      points.slice(1).forEach(p=>ctx.lineTo(...p));ctx.closePath();ctx.fill();
+    };
+    // Efface uniquement l'ancien monument, au-dessus du terrain conservé.
+    polygon([[92,270],[205,260],[221,365],[92,345]],'#fff');
+    // Silhouette gravée et perspective oblique, dans le style des arènes.
+    polygon([[96,303],[147,273],[172,281],[221,309],[217,314],[193,305],[101,309]]);
+    polygon([[109,300],[147,281],[184,300]],'#fff');
+    polygon([[114,298],[147,284],[178,298]]);
+    polygon([[120,296],[147,286],[170,296]],'#fff');
+    polygon([[100,305],[192,304],[220,313],[217,318],[190,311],[99,310]]);
+    polygon([[107,313],[191,313],[218,321],[215,351],[187,348],[107,346]]);
+    // Colonnes claires à contours irréguliers, chapiteaux et ombres latérales.
     for(let i=0;i<6;i++) {
-      const x=105+i*16;
-      ctx.fillStyle='#fff'; ctx.fillRect(x,310,7,36); ctx.strokeRect(x,310,7,36);
-      ctx.fillStyle='#000'; ctx.fillRect(x-2,308,11,3); ctx.fillRect(x-2,344,11,3);
-      ctx.lineWidth=.7; ctx.beginPath(); ctx.moveTo(x+3,315); ctx.lineTo(x+3,340); ctx.stroke(); ctx.lineWidth=2.3;
+      const x=103+i*16,offset=i%2;
+      polygon([[x-2,310],[x+10,310],[x+9,314],[x+7,315],[x+7+offset,342],[x+10,347],[x-3,347],[x,342],[x+1,315],[x-2,314]],'#fff');
+      polygon([[x+6,316],[x+8,316],[x+8,342],[x+5,342]]);
+      polygon([[x+2,319],[x+3,317],[x+3,339],[x+1,341]]);
     }
-    for(let i=0;i<3;i++) {
-      const x=199+i*6,y=311+i*2;
-      ctx.fillStyle='#fff'; ctx.fillRect(x,y,3,34); ctx.strokeRect(x,y,3,34);
+    for(let i=0;i<4;i++) {
+      const x=196+i*5,y=315+i*1.5;
+      polygon([[x,y],[x+3,y+1],[x+2,347+i],[x-1,345+i]],'#fff');
     }
-    ctx.fillStyle='#000';
-    ctx.beginPath(); ctx.moveTo(99,348); ctx.lineTo(194,348); ctx.lineTo(218,355); ctx.lineTo(218,360); ctx.lineTo(96,354); ctx.closePath(); ctx.fill();
-    ctx.fillRect(94,356,103,3); ctx.fillRect(89,362,113,3);
+    // Podium brisé, stries et végétation raccordés au paysage existant.
+    polygon([[96,349],[191,348],[220,358],[216,363],[190,355],[94,354]]);
+    polygon([[92,357],[183,358],[218,366],[189,364],[98,362],[84,364]]);
+    polygon([[83,366],[111,364],[190,368],[214,374],[170,370],[109,370],[91,373]]);
+    polygon([[95,351],[122,350],[116,353],[98,354]],'#fff');
+    polygon([[143,352],[178,352],[169,355],[137,354]],'#fff');
+    polygon([[185,354],[211,361],[197,359]],'#fff');
+    // Marques de pierre et hachures : aucun cadre rectangulaire autour du monument.
+    for(let i=0;i<17;i++) {
+      const x=101+(i*23)%112,y=305+(i*13)%52;
+      polygon([[x,y],[x+4,y-1],[x+2,y+1]],i%3?'#fff':'#000');
+    }
+    polygon([[82,359],[87,348],[90,354],[98,347],[101,357],[112,352],[109,365],[96,368],[85,366]]);
+    polygon([[187,363],[193,351],[197,359],[202,348],[206,357],[214,354],[219,368],[205,370]]);
+    polygon([[92,363],[100,359],[96,364]],'#fff');
+    polygon([[202,365],[212,362],[207,366]],'#fff');
     ctx.restore();
   }
 
@@ -1229,6 +1252,10 @@
         if(i) doc.addPage('a4','landscape');
 
         doc.addImage(backgroundData,'PNG',0,0,W,H,'bibBackgroundHD','FAST');
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(19);
+        doc.setTextColor(0,0,0);
+        doc.text('2026',centerX,50.5,{align:'center'});
         drawVectorBarcode(doc,String(s.bib),98,65,101,17);
 
         const bib=String(s.bib);
@@ -1347,13 +1374,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v31')){
-          sessionStorage.setItem('cross-browser-clean-v31','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v32')){
+          sessionStorage.setItem('cross-browser-clean-v32','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=31',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=32',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
