@@ -1,4 +1,4 @@
-const CACHE='cross-college-v25';
+const CACHE='cross-college-v26';
 const LOCAL=['/icon-180.png','/index.html','/styles.css','/app.js','/manifest.webmanifest','/apple-touch-icon.png','/favicon.png','/bib-v0.js','/bib-v1.js','/bib-v2.js','/bib-v3.js','/bib-v4.js','/bib-v5.js'];
 const EXTERNAL=[
   'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js',
@@ -59,7 +59,7 @@ self.addEventListener('fetch',event=>{
 
   event.respondWith((async()=>{
     const cache=await caches.open(CACHE);
-    const cached=await cache.match(event.request);
+    const cached=await cache.match(event.request,{ignoreSearch:url.origin===self.location.origin});
     if(cached) return cached;
     try{
       const response=await fetch(event.request);
