@@ -32,6 +32,7 @@
   let syncPending = true;
   let syncTimer = null;
   let syncBusy = false;
+  let raceClockTimer = null;
   const app = document.getElementById('app');
   const $ = s => document.querySelector(s);
   const uid = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -54,6 +55,13 @@
   const avg = a => a.length ? a.reduce((x,y) => x + y, 0) / a.length : null;
   const speedKmh = s => { if(!state.crossDistanceM || !s.elapsedMs) return null; return (state.crossDistanceM / (s.elapsedMs / 1000)) * 3.6; };
   const fmtSpeed = s => { const v=speedKmh(s); return v==null ? '—' : `${v.toFixed(1)} km/h`; };
+  const fmtRaceClock = ms => {
+    const total=Math.max(0,Math.floor(ms/1000));
+    const hours=Math.floor(total/3600);
+    const minutes=Math.floor((total%3600)/60);
+    const seconds=total%60;
+    return hours ? `${hours}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}` : `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+  };
   const classNames = () => [...new Set(state.students.map(s => s.className).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
   const levelTone = level => ({'6e':'level-6','5e':'level-5','4e':'level-4','3e':'level-3'}[level] || 'level-x');
 
@@ -308,7 +316,7 @@
 
         <aside class="day-side">
           <div class="day-panel"><div class="section-head"><div><span class="eyebrow">EN COURS</span><h3>Courses actives</h3></div></div>
-            <div class="race-list">${active.length ? active.map(r=>{const a=state.students.filter(s=>s.raceId===r.id), d=a.filter(s=>s.elapsedMs!=null).length;return `<div class="active-card"><div><strong>${esc(r.name)}</strong><span>Départ ${new Date(r.startedAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span><b>${d}/${a.length} arrivés</b></div><div class="progress"><i style="width:${a.length?Math.round(d/a.length*100):0}%"></i></div><button class="finish-now" data-finish-race="${r.id}">TERMINER</button></div>`;}).join('') : '<p class="empty">Aucune course en cours.</p>'}</div>
+            <div class="race-list">${active.length ? active.map(r=>{const a=state.students.filter(s=>s.raceId===r.id), d=a.filter(s=>s.elapsedMs!=null).length;return `<div class="active-card"><div><strong>${esc(r.name)}</strong><span>Départ ${new Date(r.startedAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span><div class="active-race-clock" data-race-clock="${r.startedAt}">${fmtRaceClock(Date.now()-r.startedAt)}</div><small class="active-race-clock-label">TEMPS DE COURSE</small><b>${d}/${a.length} arrivés</b></div><div class="progress"><i style="width:${a.length?Math.round(d/a.length*100):0}%"></i></div><button class="finish-now" data-finish-race="${r.id}">TERMINER</button></div>`;}).join('') : '<p class="empty">Aucune course en cours.</p>'}</div>
           </div>
 
           ${ended.length ? `<div class="day-panel compact-panel"><div class="section-head"><div><span class="eyebrow">TERMINÉES</span></div></div>${ended.slice(-4).reverse().map(r=>`<div class="ended-row"><span>${esc(r.name)}</span><button class="text-button" data-reopen="${r.id}">Réouvrir</button></div>`).join('')}</div>` : ''}
@@ -413,7 +421,18 @@
     </div></div>`;
   }
 
+  function updateRaceClocks() {
+    document.querySelectorAll('[data-race-clock]').forEach(el=>{
+      const startedAt=Number(el.dataset.raceClock);
+      if(Number.isFinite(startedAt)&&startedAt>0) el.textContent=fmtRaceClock(Date.now()-startedAt);
+    });
+  }
+
   function bind() {
+    clearInterval(raceClockTimer);
+    raceClockTimer=null;
+    updateRaceClocks();
+    if(document.querySelector('[data-race-clock]')) raceClockTimer=setInterval(updateRaceClocks,1000);
     document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;save();render();});
     $('#student-file')?.addEventListener('change',e=>importStudents(e.target.files?.[0]));
     $('#bibs')?.addEventListener('click',exportBibs);
@@ -1097,13 +1116,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v22')){
-          sessionStorage.setItem('cross-browser-clean-v22','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v23')){
+          sessionStorage.setItem('cross-browser-clean-v23','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=22',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=23',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
