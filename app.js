@@ -397,24 +397,45 @@
     if (!file) return;
     try {
       let rows;
-      if (file.name.toLowerCase().endsWith('.csv')) rows = parseCsv(await file.text());
+      if (file.name.toLowerCase().endsWith('.csv')) rows=parseCsv(await file.text());
       else {
-        if (!window.XLSX) throw new Error('Module Excel indisponible. Recharge l’application avec Internet.');
+        if(!window.XLSX) throw new Error('Module Excel indisponible. Recharge l’application avec Internet.');
         const wb=XLSX.read(await file.arrayBuffer()), ws=wb.Sheets[wb.SheetNames[0]];
         rows=XLSX.utils.sheet_to_json(ws,{defval:''});
       }
-      const students=rows.map((row,i) => {
+
+      const students=rows.map(row=>{
         const className=String(pick(row,['classe','class','classname'])).trim();
-        const bib=Number(pick(row,['dossard','numero','numéro','bib']));
-        return { id:uid(), lastName:String(pick(row,['nom','lastname','name'])).trim(), firstName:String(pick(row,['prenom','prénom','firstname'])).trim(), className,
-          level:levelOf(className,pick(row,['niveau','level'])), sex:sexOf(pick(row,['sexe','genre','sex'])), teacher:String(pick(row,['enseignant','professeur','professeurprincipal','pp','teacher'])).trim(), bib:Number.isFinite(bib)&&bib>0?bib:i+1 };
-      }).filter(s => s.lastName && s.className);
-      if (!students.length) throw new Error('Aucun élève détecté. Il faut au minimum Nom et Classe.');
-      const used=new Set(); let next=1; for(const s of students){ if(used.has(s.bib)){ while(used.has(next)) next++; s.bib=next; } used.add(s.bib); while(used.has(next)) next++; }
-      if (state.students.length && !confirm(`Remplacer les ${state.students.length} élèves actuels ? Les courses et chronos seront effacés.`)) return;
-      const classTeachers={}; students.forEach(s=>{ if(s.teacher){ if(!classTeachers[s.className]) classTeachers[s.className]=[]; if(!classTeachers[s.className].includes(s.teacher)) classTeachers[s.className].push(s.teacher); }}); Object.keys(classTeachers).forEach(k=>classTeachers[k]=classTeachers[k].slice(0,2));
-      state={...EMPTY,students,classTeachers,notice:`${students.length} élèves importés`}; save(); render();
-    } catch(e) { notify(e.message || 'Import impossible'); }
+        const rawBib=String(pick(row,['dossard','numero','numéro','bib'])??'').trim();
+        const bib=rawBib!=='' ? Number(rawBib) : null;
+        return {
+          id:uid(),
+          lastName:String(pick(row,['nom','lastname','name'])).trim(),
+          firstName:String(pick(row,['prenom','prénom','firstname'])).trim(),
+          className,
+          level:levelOf(className,pick(row,['niveau','level'])),
+          sex:sexOf(pick(row,['sexe','genre','sex'])),
+          teacher:String(pick(row,['enseignant','professeur','professeureps','eps','professeurprincipal','pp','teacher'])).trim(),
+          bib:Number.isInteger(bib)&&bib>0?bib:null
+        };
+      }).filter(s=>s.lastName&&s.className);
+
+      if(!students.length) throw new Error('Aucun élève détecté. Il faut au minimum Nom et Classe.');
+      if(state.students.length && !confirm(`Remplacer les ${state.students.length} élèves actuels ? Les courses et chronos seront effacés.`)) return;
+
+      const classTeachers={};
+      students.forEach(s=>{
+        if(s.teacher){
+          classTeachers[s.className] ||= [];
+          if(!classTeachers[s.className].includes(s.teacher)) classTeachers[s.className].push(s.teacher);
+        }
+      });
+      Object.keys(classTeachers).forEach(k=>classTeachers[k]=classTeachers[k].slice(0,1));
+
+      state={...EMPTY,students,classTeachers,notice:`${students.length} élèves importés`,noticeKind:'good'};
+      openClass=''; studentEditorId=null; studentSearch='';
+      save(); render();
+    } catch(e) { notify(e.message || 'Import impossible','error'); }
   }
 
   function parseCsv(text) {
@@ -424,33 +445,165 @@
     const head=split(lines[0]); return lines.slice(1).map(line => { const vals=split(line), o={}; head.forEach((h,i)=>o[h]=vals[i]??''); return o; });
   }
 
+  function updateRaceCount() {
+    const out=$('#race-count');
+    if(!out) return;
+    const levels=[...document.querySelectorAll('[data-level].selected')].map(x=>x.dataset.level);
+    const sexes=[...document.querySelectorAll('[data-sex].selected')].map(x=>x.dataset.sex);
+    const count=state.students.filter(s=>!s.raceId&&levels.includes(s.level)&&sexes.includes(s.sex)).length;
+    out.textContent=String(count);
+    const label=out.nextElementSibling;
+    if(label) label.textContent=count>1?'élèves sélectionnés':'élève sélectionné';
+  }
+
+  function saveStudentEditor() {
+    const lastName=$('#student-last')?.value.trim()||'';
+    const firstName=$('#student-first')?.value.trim()||'';
+    const className=$('#student-class')?.value.trim()||'';
+    const sex=$('#student-sex')?.value||'X';
+    const bibRaw=$('#student-bib')?.value.trim()||'';
+    const bib=bibRaw?Number(bibRaw):null;
+    if(!lastName||!className) return notify('Nom et classe obligatoires.','error');
+    if(bibRaw && (!Number.isInteger(bib)||bib<=0)) return notify('Dossard invalide.','error');
+
+    const duplicate=state.students.find(s=>Number.isInteger(bib)&&s.bib===bib&&s.id!==studentEditorId);
+    if(duplicate) return notify(`Le dossard ${bib} est déjà attribué à ${nameOf(duplicate)}.`,'error');
+
+    if(studentEditorId==='new'){
+      state.students.push({id:uid(),lastName,firstName,className,level:levelOf(className,''),sex,bib,raceId:null});
+      state.notice=`${lastName.toUpperCase()} ${firstName} ajouté à ${className}`;
+    } else {
+      const s=state.students.find(x=>x.id===studentEditorId);
+      if(!s) return;
+      Object.assign(s,{lastName,firstName,className,level:levelOf(className,''),sex,bib});
+      state.notice=`${lastName.toUpperCase()} ${firstName} modifié`;
+    }
+    state.noticeKind='good';
+    openClass=className;
+    studentEditorId=null;
+    save(); render();
+  }
+
   function createRace() {
     const name=$('#race-name')?.value.trim();
     const levels=[...document.querySelectorAll('[data-level].selected')].map(x=>x.dataset.level);
     const sexes=[...document.querySelectorAll('[data-sex].selected')].map(x=>x.dataset.sex);
-    if(!name) return notify('Donne un nom à la course');
-    if(!levels.length || !sexes.length) return notify('Sélectionne au moins un niveau et un sexe');
-    const runners=state.students.filter(s => !s.raceId && levels.includes(s.level) && sexes.includes(s.sex));
-    if(!runners.length) return notify('Aucun élève disponible pour ces critères');
-    const race={id:uid(),name,levels,sexes,createdAt:Date.now()}; state.races.push(race); runners.forEach(s=>s.raceId=race.id);
-    state.notice=`${name} créée : ${runners.length} élèves`; save(); render();
+    if(!name) return notify('Donne un nom à la course.','warning');
+    if(!levels.length||!sexes.length) return notify('Sélectionne au moins un niveau et un sexe.','warning');
+    const runners=state.students.filter(s=>!s.raceId&&levels.includes(s.level)&&sexes.includes(s.sex));
+    if(!runners.length) return notify('Aucun élève disponible pour ces critères.','warning');
+    const race={id:uid(),name,levels,sexes,createdAt:Date.now()};
+    state.races.push(race);
+    runners.forEach(s=>s.raceId=race.id);
+    state.notice=`${name} créée · ${runners.length} élèves`;
+    state.noticeKind='good';
+    save(); render();
   }
-  function deleteRace(id) { const r=raceOf(id); if(!r || r.startedAt) return; if(!confirm(`Supprimer « ${r.name} » ?`)) return; state.students.forEach(s=>{if(s.raceId===id) delete s.raceId;}); state.races=state.races.filter(x=>x.id!==id); save(); render(); }
-  function startRace(id) { const r=raceOf(id); if(!r || r.startedAt) return; if(!state.crossDistanceM) { state.tab='races'; return notify('Renseigne la distance du cross avant de lancer une course'); } if(!confirm(`Lancer maintenant « ${r.name} » ?`)) return; r.startedAt=Date.now(); delete r.endedAt; state.notice=`${r.name} lancée`; state.tab='timing'; save(); render(); }
-  function finishRace(id) { const r=raceOf(id); if(!r?.startedAt || r.endedAt) return; const runners=state.students.filter(s=>s.raceId===id), missing=runners.filter(s=>s.elapsedMs==null).length; if(!confirm(`Terminer « ${r.name} » maintenant ? ${missing} élève(s) sans arrivée resteront non classés/absents.`)) return; r.endedAt=Date.now(); state.notice=`${r.name} terminée · ${missing} absent(s)/non arrivé(s)`; save(); render(); }
-  function reopenRace(id) { const r=raceOf(id); if(!r?.endedAt) return; if(!confirm(`Réouvrir « ${r.name} » pour accepter de nouvelles arrivées ?`)) return; delete r.endedAt; state.notice=`${r.name} réouverte`; save(); render(); }
-  function saveClassTeachers(className) { const a=document.querySelector(`[data-teacher1="${CSS.escape(className)}"]`)?.value.trim()||''; const b=document.querySelector(`[data-teacher2="${CSS.escape(className)}"]`)?.value.trim()||''; const arr=[a,b].filter(Boolean).filter((v,i,x)=>x.indexOf(v)===i); state.classTeachers ||= {}; state.classTeachers[className]=arr; state.notice=`Professeurs enregistrés pour ${className}`; save(); render(); }
+
+  function deleteRace(id) {
+    const r=raceOf(id);
+    if(!r||r.startedAt) return;
+    if(!confirm(`Supprimer « ${r.name} » ?`)) return;
+    state.students.forEach(s=>{if(s.raceId===id) delete s.raceId;});
+    state.races=state.races.filter(x=>x.id!==id);
+    state.notice=`${r.name} supprimée`; state.noticeKind='info';
+    save(); render();
+  }
+
+  function startRace(id) {
+    const r=raceOf(id);
+    if(!r||r.startedAt) return;
+    if(!state.crossDistanceM){ state.tab='races'; return notify('Renseigne la distance avant le premier départ.','warning'); }
+    r.startedAt=Date.now();
+    delete r.endedAt;
+    state.notice=`${r.name} · DÉPART enregistré à ${new Date(r.startedAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
+    state.noticeKind='good';
+    state.tab='timing';
+    save(); render();
+  }
+
+  function finishRace(id) {
+    const r=raceOf(id);
+    if(!r?.startedAt||r.endedAt) return;
+    const runners=state.students.filter(s=>s.raceId===id);
+    const missing=runners.filter(s=>s.elapsedMs==null);
+    const names=missing.slice(0,8).map(s=>nameOf(s)).join(', ');
+    const detail=missing.length ? `\n\nSans arrivée : ${names}${missing.length>8?'…':''}` : '';
+    if(!confirm(`${r.name} : ${runners.length-missing.length}/${runners.length} arrivés.\nTerminer la course ?${detail}`)) return;
+    r.endedAt=Date.now();
+    state.notice=`${r.name} terminée · ${runners.length-missing.length}/${runners.length} classés`;
+    state.noticeKind='good';
+    save(); render();
+  }
+
+  function reopenRace(id) {
+    const r=raceOf(id);
+    if(!r?.endedAt) return;
+    if(!confirm(`Réouvrir « ${r.name} » ? L’heure de départ et les chronos existants restent inchangés.`)) return;
+    delete r.endedAt;
+    state.notice=`${r.name} réouverte`; state.noticeKind='warning';
+    save(); render();
+  }
+
+  function saveClassTeachers(className) {
+    if(!className) return;
+    const teacher=$('#class-teacher')?.value.trim()||'';
+    state.classTeachers ||= {};
+    state.classTeachers[className]=teacher?[teacher]:[];
+    state.notice=teacher?`${teacher} référent EPS de ${className}`:`Professeur EPS retiré pour ${className}`;
+    state.noticeKind='good';
+    save(); render();
+  }
 
   function finish(student, stamp, method) {
-    if(student.elapsedMs != null) return notify(`${nameOf(student)} est déjà arrivé en ${fmt(student.elapsedMs)}`);
-    const race=raceOf(student.raceId); if(!race?.startedAt) return notify(`La course de ${nameOf(student)} n’a pas démarré`); if(race.endedAt) return notify(`La course « ${race.name} » est terminée. Réouvre-la pour enregistrer cette arrivée.`);
-    const elapsedMs=Math.max(0,stamp-race.startedAt); student.finishedAt=stamp; student.elapsedMs=elapsedMs;
-    state.arrivals.push({id:uid(),studentId:student.id,raceId:race.id,stamp,elapsedMs,method}); state.notice=`#${student.bib} ${nameOf(student)} — ${fmt(elapsedMs)}${state.crossDistanceM ? ` — ${fmtSpeed(student)}` : ''}`; save(); render();
+    if(student.elapsedMs!=null) return notify(`DÉJÀ ARRIVÉ · #${student.bib} ${nameOf(student)} · ${fmt(student.elapsedMs)}`,'error');
+    const race=raceOf(student.raceId);
+    if(!race?.startedAt) return notify(`Course non démarrée · ${nameOf(student)}`,'error');
+    if(race.endedAt) return notify(`Course terminée · réouvre « ${race.name} »`,'error');
+    const elapsedMs=Math.max(0,stamp-race.startedAt);
+    student.finishedAt=stamp;
+    student.elapsedMs=elapsedMs;
+    state.arrivals.push({id:uid(),studentId:student.id,raceId:race.id,stamp,elapsedMs,method});
+    state.notice=`#${student.bib} · ${nameOf(student)} · ${fmt(elapsedMs)}`;
+    state.noticeKind='good';
+    save(); render();
   }
-  function scan(raw) { state.scannerSeen=true; state.scannerLastAt=Date.now(); state.lastScan=raw; const m=String(raw).trim().match(/(\d+)/); if(!m) return notify(`Code non reconnu : ${raw}`); const bib=Number(m[1]); const s=state.students.find(x=>x.bib===bib); if(!s) return notify(`Dossard ${bib} inconnu`); finish(s,Date.now(),'scan'); }
-  function manualFinish(id) { const s=state.students.find(x=>x.id===id); if(!s || manualStamp===null) return; const stamp=manualStamp; manualStamp=null; manualQuery=''; finish(s,stamp,'manual'); }
+
+  function scan(raw) {
+    state.scannerSeen=true;
+    state.scannerLastAt=Date.now();
+    state.lastScan=raw;
+    const m=String(raw).trim().match(/(\d+)/);
+    if(!m) return notify(`CODE NON RECONNU · ${raw}`,'error');
+    const bib=Number(m[1]);
+    const s=state.students.find(x=>x.bib===bib);
+    if(!s) return notify(`DOSSARD ${bib} INCONNU`,'error');
+    finish(s,Date.now(),'scan');
+  }
+
+  function manualFinish(id) {
+    const s=state.students.find(x=>x.id===id);
+    if(!s||manualStamp===null) return;
+    const stamp=manualStamp;
+    manualStamp=null;
+    manualQuery='';
+    finish(s,stamp,'manual');
+  }
+
   function closeManual(){ manualStamp=null; manualQuery=''; render(); }
-  function undoLast(){ const a=state.arrivals.at(-1); if(!a) return notify('Aucune arrivée à annuler'); const s=state.students.find(x=>x.id===a.studentId); if(s){delete s.finishedAt; delete s.elapsedMs; state.notice=`Arrivée annulée : #${s.bib} ${nameOf(s)}`;} state.arrivals.pop(); save(); render(); }
+
+  function undoLast() {
+    const a=state.arrivals.at(-1);
+    if(!a) return notify('Aucune arrivée à annuler.','info');
+    const s=state.students.find(x=>x.id===a.studentId);
+    if(!s) return;
+    if(!confirm(`Annuler l’arrivée de #${s.bib} ${nameOf(s)} en ${fmt(a.elapsedMs)} ?`)) return;
+    delete s.finishedAt; delete s.elapsedMs;
+    state.arrivals.pop();
+    state.notice=`Arrivée annulée · #${s.bib} ${nameOf(s)}`;
+    state.noticeKind='warning';
+    save(); render();
+  }
 
   function rankings() {
     const finished=state.students.filter(s=>s.elapsedMs!=null), individual=[], byRace=[], byClass=[], classAverages=[], classOverall=[], teacherAverages=[];
