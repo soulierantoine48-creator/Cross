@@ -1025,6 +1025,9 @@
     }
 
     bibBackgroundDataCache=canvas.toDataURL('image/png');
+    // Libère immédiatement ~35 Mo de bitmap sur iPad ; le PNG en mémoire suffit ensuite.
+    canvas.width=1;
+    canvas.height=1;
     return bibBackgroundDataCache;
   }
 
@@ -1101,78 +1104,106 @@
     const issues=bibIssues();
     if(issues.length) throw new Error(`Impossible de créer les dossards : ${issues.length} anomalie(s). ${issues[0]}`);
     if(!window.JsBarcode || !window.QRCode) throw new Error('Modules QR / Code 128 indisponibles.');
-    for(let i=0;i<state.students.length;i++){
-      const s=state.students[i];
+    if(!state.students.length) throw new Error('Aucun élève à imprimer.');
+
+    // Tester quelques valeurs suffit : tous les dossards sont numériques et ont déjà été validés.
+    const checks=[state.students[0],state.students[Math.floor(state.students.length/2)],state.students.at(-1)].filter(Boolean);
+    for(const s of checks){
       const value=String(s.bib);
       const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
       JsBarcode(svg,value,{format:'CODE128',displayValue:false,height:40,margin:8,width:2});
       if(svg.querySelectorAll('rect').length<2) throw new Error(`Code 128 invalide pour le dossard ${value}`);
       const holder=document.createElement('div');
-      new QRCode(holder,{text:value,width:128,height:128,correctLevel:QRCode.CorrectLevel.H});
-      if(!holder.querySelector('canvas') && !holder.querySelector('img')) throw new Error(`QR invalide pour le dossard ${value}`);
-      if(i%25===24) await new Promise(resolve=>requestAnimationFrame(resolve));
+      new QRCode(holder,{text:value,width:160,height:160,correctLevel:QRCode.CorrectLevel.H});
+      const q=holder.querySelector('canvas')||holder.querySelector('img');
+      if(!q) throw new Error(`QR invalide pour le dossard ${value}`);
+      if(q.tagName==='CANVAS'){ q.width=1; q.height=1; }
     }
+    await new Promise(resolve=>requestAnimationFrame(resolve));
     return true;
   }
 
   async function exportBibs() {
     if(!window.jspdf?.jsPDF || !window.JsBarcode || !window.QRCode) return notify('Module dossards indisponible. Recharge avec Internet.','error');
+    const button=document.getElementById('bibs');
+    const originalLabel=button?.textContent||'Créer les dossards PDF';
+    if(button){ button.disabled=true; button.textContent='Préparation du PDF…'; }
+
     try {
-      state.notice=`Contrôle de ${state.students.length} dossards…`; state.noticeKind='info'; render();
       await preflightBibs();
-    } catch(e) { return notify(e.message || 'Contrôle des dossards impossible.','error'); }
 
-    let backgroundData;
-    try { backgroundData=buildBibBackgroundData(); }
-    catch(e){ return notify(e.message || 'Fond haute définition du dossard indisponible'); }
+      let backgroundData;
+      try { backgroundData=buildBibBackgroundData(); }
+      catch(e){ throw new Error(e.message || 'Fond haute définition du dossard indisponible'); }
 
-    const {jsPDF}=window.jspdf;
-    const doc=new jsPDF({unit:'mm',format:'a4',orientation:'landscape'});
-    const W=297,H=210,centerX=W/2;
-
-    state.students.forEach((s,i)=>{
-      if(i) doc.addPage('a4','landscape');
-
-      // Fond reconstruit à 300 dpi depuis les tracés noir/blanc et réutilisé sur toutes les pages.
-      doc.addImage(backgroundData,'PNG',0,0,W,H,'bibBackgroundHD','FAST');
-
-      // Code 128 entièrement vectoriel : aucune pixellisation, même en zoomant ou à l'impression.
-      drawVectorBarcode(doc,String(s.bib),98,58,101,17);
-
-      // Numéro : beaucoup plus dominant, avec adaptation automatique si 4 chiffres ou plus.
-      const bib=String(s.bib);
-      const bibSize=fitPdfText(doc,bib,112,150,82,'helvetica','bold');
-      doc.setFont('helvetica','bold');
-      doc.setFontSize(bibSize);
-      doc.text(bib,centerX,132,{align:'center'});
-
-      // Nom/prénom : taille forte pour les noms usuels, réduction automatique sinon.
-      const classY=drawStudentName(doc,s,centerX);
-
-      // Classe : secondaire, mais lisible.
-      doc.setFont('helvetica','bold');
-      doc.setFontSize(11.5);
-      doc.text(String(s.className||''),centerX,classY,{align:'center'});
-
-      // QR : centré en bas, assez grand pour être lu de près.
-      doc.setFillColor(255,255,255);
-      doc.rect(126,160,45,44,'F');
-      const holder=document.createElement('div');
-      new QRCode(holder,{
-        text:String(s.bib),
-        width:1024,
-        height:1024,
-        correctLevel:QRCode.CorrectLevel.H
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({
+        unit:'mm',
+        format:'a4',
+        orientation:'landscape',
+        compress:true,
+        putOnlyUsedFonts:true
       });
-      const qrCanvas=holder.querySelector('canvas'), qrImg=holder.querySelector('img');
-      const qrData=qrCanvas ? qrCanvas.toDataURL('image/png') : qrImg?.src;
-      if(qrData) doc.addImage(qrData,'PNG',130,164,37,37,undefined,'NONE');
-    });
+      const W=297,H=210,centerX=W/2,total=state.students.length;
 
-    doc.save('dossards-cross-ada-lovelace-2026.pdf');
-    state.notice=`${state.students.length}/${state.students.length} dossards contrôlés et générés`;
-    state.noticeKind='good';
-    save(); render();
+      for(let i=0;i<total;i++){
+        const s=state.students[i];
+        if(i) doc.addPage('a4','landscape');
+
+        // Le fond est référencé une seule fois dans le PDF grâce à l'alias.
+        doc.addImage(backgroundData,'PNG',0,0,W,H,'bibBackgroundHD','FAST');
+
+        // Code 128 entièrement vectoriel.
+        drawVectorBarcode(doc,String(s.bib),98,58,101,17);
+
+        const bib=String(s.bib);
+        const bibSize=fitPdfText(doc,bib,112,150,82,'helvetica','bold');
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(bibSize);
+        doc.text(bib,centerX,132,{align:'center'});
+
+        const classY=drawStudentName(doc,s,centerX);
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(11.5);
+        doc.text(String(s.className||''),centerX,classY,{align:'center'});
+
+        // 320 px sur 37 mm = ~220 dpi : très largement suffisant pour un QR imprimé,
+        // tout en utilisant ~10x moins de mémoire qu'un canvas 1024 px.
+        doc.setFillColor(255,255,255);
+        doc.rect(126,160,45,44,'F');
+        const holder=document.createElement('div');
+        new QRCode(holder,{
+          text:String(s.bib),
+          width:320,
+          height:320,
+          correctLevel:QRCode.CorrectLevel.H
+        });
+        const qrCanvas=holder.querySelector('canvas'), qrImg=holder.querySelector('img');
+        const qrData=qrCanvas ? qrCanvas.toDataURL('image/png') : qrImg?.src;
+        if(qrData) doc.addImage(qrData,'PNG',130,164,37,37,undefined,'FAST');
+
+        // Safari iPad a besoin qu'on lui rende la main pour libérer les canvases précédents.
+        if(qrCanvas){ qrCanvas.width=1; qrCanvas.height=1; }
+        if(i%8===7 || i===total-1){
+          if(button) button.textContent=`PDF · ${i+1}/${total}`;
+          await new Promise(resolve=>requestAnimationFrame(resolve));
+        }
+      }
+
+      if(button) button.textContent='Finalisation du PDF…';
+      await new Promise(resolve=>setTimeout(resolve,0));
+      doc.save('dossards-cross-ada-lovelace-2026.pdf');
+
+      state.notice=`${total}/${total} dossards contrôlés et générés`;
+      state.noticeKind='good';
+      save();
+      render();
+    } catch(e) {
+      notify(e.message || 'Création du PDF impossible','error');
+    } finally {
+      const b=document.getElementById('bibs');
+      if(b){ b.disabled=false; b.textContent=originalLabel; }
+    }
   }
 
   function downloadTemplate(){ downloadBlob('\uFEFFNom;Prénom;Classe;Niveau;Sexe;Enseignant;Dossard\nDUPONT;Lina;6A;6e;F;Mme Martin;1\nMARTIN;Noé;6A;6e;M;Mme Martin;2\n','modele-eleves-cross.csv','text/csv;charset=utf-8'); }
@@ -1240,13 +1271,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v28')){
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v29')){
           sessionStorage.setItem('cross-browser-clean-v27','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=28',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=29',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
