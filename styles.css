@@ -863,3 +863,47 @@ td b{color:#26364a}
 @media(max-width:720px){
   .teacher-options{grid-template-columns:repeat(2,1fr)}
 }
+
+
+/* Dernière passe sécurité / Jour J */
+.file-button.disabled{
+  opacity:.48;
+  cursor:default;
+  pointer-events:none;
+}
+.all-started{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:3px;
+  color:#6f7d8f;
+}
+.all-started strong{
+  color:#2a3a4f;
+  font-size:15px;
+}
+.all-started span{
+  font-size:12px;
+}
+.active-race-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.reset-start{
+  border:0;
+  background:#eef2f7;
+  color:#667488;
+  border-radius:12px;
+  padding:10px;
+  font-weight:850;
+}
+.reset-start:disabled{
+  opacity:.36;
+}
+.test-active{
+  color:#b36e17 !important;
+}
+@media(max-width:720px){
+  .all-started{align-items:flex-start}
+}
