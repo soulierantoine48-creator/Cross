@@ -899,6 +899,7 @@
   }
 
   function saveSettings() {
+    if(anyRaceStarted()) return notify('La distance est verrouillée après le premier départ.','warning');
     const distance=Number($('#cross-distance')?.value);
     if(!Number.isFinite(distance) || distance<=0) return notify('Renseigne une distance valide en mètres');
     state.crossDistanceM=Math.round(distance);
