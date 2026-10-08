@@ -847,6 +847,17 @@
     finish(s,Date.now(),'scan');
   }
 
+  function freezeNoBibTime() {
+    const stamp=Date.now();
+    if(!Array.isArray(state.manualPending)) state.manualPending=[];
+    state.manualPending.push(stamp);
+    if(manualStamp===null) manualStamp=state.manualPending[0];
+    manualQuery='';
+    state.notice=state.manualPending.length===1?'Temps sans dossard figé':state.manualPending.length+' temps sans dossard en attente';
+    state.noticeKind='warning';
+    save(); render();
+  }
+
   function manualFinish(id) {
     const s=state.students.find(x=>x.id===id);
     if(!s||manualStamp===null) return;
