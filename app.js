@@ -13,6 +13,8 @@
   ];
 
   let state = load();
+  const BAD_IMPORT_FIX_KEY = 'cross-bad-bib-import-cleared-v1';
+  clearBrokenBibImportOnce();
   let manualStamp = null;
   let manualQuery = '';
   let scanBuffer = '';
@@ -81,6 +83,22 @@
   function load() {
     try { return { ...EMPTY, ...(JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}) }; }
     catch { return { ...EMPTY }; }
+  }
+
+  function clearBrokenBibImportOnce() {
+    if(localStorage.getItem(BAD_IMPORT_FIX_KEY)==='1') return;
+    const students=Array.isArray(state.students)?state.students:[];
+    const allBibsMissing=students.length>0 && students.every(s=>{
+      const bib=Number(s.bib);
+      return !Number.isInteger(bib) || bib<=0;
+    });
+    const noRaceData=!(state.races?.length) && !(state.arrivals?.length);
+    if(allBibsMissing && noRaceData){
+      const distance=Number(state.crossDistanceM)||0;
+      state={...EMPTY,crossDistanceM:distance,notice:'Ancien import supprimé · réimporte le fichier avec les N° Dossard',noticeKind:'good'};
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+    }
+    localStorage.setItem(BAD_IMPORT_FIX_KEY,'1');
   }
   function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -220,9 +238,9 @@
 
       <div class="courses-grid">
         <div class="card clean-card"><span class="eyebrow">CRÉATION MANUELLE</span><h2>Créer une course</h2>
-          <label class="field">Nom<input id="race-name" placeholder="Ex. 6e filles"></label>
           <div class="field"><span>Niveau</span><div class="chip-row">${levels.map(l => `<button class="chip" data-level="${esc(l)}">${esc(l)}</button>`).join('')}</div></div>
           <div class="field"><span>Sexe</span><div class="chip-row"><button class="chip" data-sex="F">Filles</button><button class="chip" data-sex="M">Garçons</button><button class="chip" data-sex="X">Non renseigné</button></div></div>
+          <div class="race-preview"><span>Nom automatique</span><strong id="race-name-preview">Sélectionne un niveau et un sexe</strong></div>
           <div class="race-preview"><strong id="race-count">0</strong><span>élève sélectionné</span></div>
           <button class="button primary full" id="create-race">Créer la course</button>
         </div>
@@ -362,7 +380,18 @@
     $('#close-student')?.addEventListener('click',()=>{studentEditorId=null;render();});
     $('#save-student')?.addEventListener('click',saveStudentEditor);
 
-    document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{b.classList.toggle('selected');updateRaceCount();});
+    document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>{
+      const wasSelected=b.classList.contains('selected');
+      document.querySelectorAll('[data-level]').forEach(x=>x.classList.remove('selected'));
+      if(!wasSelected) b.classList.add('selected');
+      updateRaceCount();
+    });
+    document.querySelectorAll('[data-sex]').forEach(b=>b.onclick=()=>{
+      const wasSelected=b.classList.contains('selected');
+      document.querySelectorAll('[data-sex]').forEach(x=>x.classList.remove('selected'));
+      if(!wasSelected) b.classList.add('selected');
+      updateRaceCount();
+    });
     $('#create-race')?.addEventListener('click',createRace);
     document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>deleteRace(b.dataset.delete));
     document.querySelectorAll('[data-arm-race]').forEach(b=>b.onclick=()=>{armedRaceId=b.dataset.armRace;render();});
@@ -425,7 +454,7 @@
 
       const students=rows.map(row=>{
         const className=String(pick(row,['classe','class','classname'])).trim();
-        const rawBib=String(pick(row,['dossard','numero','numéro','bib'])??'').trim();
+        const rawBib=String(pick(row,['dossard','numero','numéro','bib','n° dossard','nº dossard','n dossard','ndossard','no dossard','numero dossard','numéro dossard','numerodossard','numérodossard'])??'').trim();
         const bib=rawBib!=='' ? Number(rawBib) : null;
         return {
           id:uid(),
@@ -464,6 +493,11 @@
     const head=split(lines[0]); return lines.slice(1).map(line => { const vals=split(line), o={}; head.forEach((h,i)=>o[h]=vals[i]??''); return o; });
   }
 
+  function raceAutoName(level,sex) {
+    const sexLabel={F:'Filles',M:'Garçons',X:'Non renseigné'}[sex] || '';
+    return level && sexLabel ? `${level} ${sexLabel}` : '';
+  }
+
   function updateRaceCount() {
     const out=$('#race-count');
     if(!out) return;
@@ -473,6 +507,8 @@
     out.textContent=String(count);
     const label=out.nextElementSibling;
     if(label) label.textContent=count>1?'élèves sélectionnés':'élève sélectionné';
+    const namePreview=$('#race-name-preview');
+    if(namePreview) namePreview.textContent=(levels.length===1&&sexes.length===1) ? raceAutoName(levels[0],sexes[0]) : 'Sélectionne un niveau et un sexe';
   }
 
   function saveStudentEditor() {
@@ -504,11 +540,10 @@
   }
 
   function createRace() {
-    const name=$('#race-name')?.value.trim();
     const levels=[...document.querySelectorAll('[data-level].selected')].map(x=>x.dataset.level);
     const sexes=[...document.querySelectorAll('[data-sex].selected')].map(x=>x.dataset.sex);
-    if(!name) return notify('Donne un nom à la course.','warning');
-    if(!levels.length||!sexes.length) return notify('Sélectionne au moins un niveau et un sexe.','warning');
+    if(levels.length!==1||sexes.length!==1) return notify('Sélectionne un niveau et un sexe.','warning');
+    const name=raceAutoName(levels[0],sexes[0]);
     const runners=state.students.filter(s=>!s.raceId&&levels.includes(s.level)&&sexes.includes(s.sex));
     if(!runners.length) return notify('Aucun élève disponible pour ces critères.','warning');
     const race={id:uid(),name,levels,sexes,createdAt:Date.now()};
@@ -944,13 +979,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v20')){
-          sessionStorage.setItem('cross-browser-clean-v20','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v21')){
+          sessionStorage.setItem('cross-browser-clean-v21','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=20',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=21',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
