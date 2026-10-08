@@ -288,7 +288,7 @@
 
     return `<section class="day-page">
       <div class="day-statusbar">
-        <span class="status-chip ${state.scannerSeen?'ok':''}">${state.scannerSeen?'● Scanner prêt':'○ Scanner non testé'}</span>
+        <span class="status-chip ${state.scannerSeen?'ok':''}">${state.scannerSeen?'● Scanner testé':'○ Scanner non testé'}</span>
         <span class="status-chip">Parcours · ${state.crossDistanceM ? state.crossDistanceM+' m' : 'distance à régler'}</span>
         <span class="status-chip">${active.length} course${active.length>1?'s':''} en cours</span>
       </div>
@@ -1240,13 +1240,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v27')){
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v28')){
           sessionStorage.setItem('cross-browser-clean-v27','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=27',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=28',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
