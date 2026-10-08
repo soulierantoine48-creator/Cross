@@ -934,15 +934,23 @@
   setInterval(()=>{if(syncPending) syncCloud();},15000);
 
   if('serviceWorker' in navigator) window.addEventListener('load', async () => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
     try{
-      let reloading=false;
-      navigator.serviceWorker.addEventListener('controllerchange',()=>{
-        if(reloading||sessionStorage.getItem('cross-sw17-reloaded')) return;
-        reloading=true;
-        sessionStorage.setItem('cross-sw17-reloaded','1');
-        location.reload();
-      });
-      const reg=await navigator.serviceWorker.register('/sw.js?v=17',{updateViaCache:'none'});
+      if(!standalone){
+        const hadController=!!navigator.serviceWorker.controller;
+        const regs=await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(reg=>reg.unregister()));
+        if('caches' in window){
+          const keys=await caches.keys();
+          await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
+        }
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v18')){
+          sessionStorage.setItem('cross-browser-clean-v18','1');
+          location.reload();
+        }
+        return;
+      }
+      const reg=await navigator.serviceWorker.register('/sw.js?v=18',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
