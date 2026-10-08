@@ -212,9 +212,10 @@
       <div class="hero-card">
         <div><span class="eyebrow">PRÉPARATION</span><h2>Élèves & dossards</h2><p>Importe la liste, contrôle les données puis ouvre chaque classe pour les ajustements.</p></div>
         <div class="actions">
-          <label class="button primary file-button">Importer Excel<input id="student-file" type="file" accept=".xlsx,.xls,.csv"></label>
+          <label class="button primary file-button ${anyRaceStarted()?'disabled':''}" title="${anyRaceStarted()?'Import verrouillé après le premier départ':''}">${anyRaceStarted()?'Import verrouillé':'Importer Excel'}<input id="student-file" type="file" accept=".xlsx,.xls,.csv" ${anyRaceStarted()?'disabled':''}></label>
           <button class="button" id="bibs" ${state.students.length?'':'disabled'}>Créer les dossards PDF</button>
           <button class="button subtle" id="backup">Sauvegarde de secours</button>
+          <label class="button subtle file-button">Restaurer<input id="backup-file" type="file" accept=".json,application/json"></label>
         </div>
       </div>
 
@@ -251,7 +252,7 @@
     return `<section class="courses-page">
       <div class="distance-card">
         <div><span class="eyebrow">PARCOURS</span><h2>Distance unique</h2><p>La même distance sera utilisée pour toutes les courses et les vitesses moyennes.</p></div>
-        <div class="distance-input"><input id="cross-distance" type="number" min="100" step="10" inputmode="numeric" value="${state.crossDistanceM || ''}" placeholder="1500"><span>m</span><button class="button primary" id="save-settings">Enregistrer</button></div>
+        <div class="distance-input"><input id="cross-distance" type="number" min="100" step="10" inputmode="numeric" value="${state.crossDistanceM || ''}" placeholder="1500" ${anyRaceStarted()?'disabled':''}><span>m</span><button class="button primary" id="save-settings" ${anyRaceStarted()?'disabled':''}>${anyRaceStarted()?'Verrouillée':'Enregistrer'}</button></div>
       </div>
 
       <div class="courses-grid">
@@ -267,7 +268,7 @@
           <div class="race-list">${state.races.length ? state.races.map(r => {
             const runners=state.students.filter(s=>s.raceId===r.id), done=runners.filter(s=>s.elapsedMs!=null).length;
             const status=!r.startedAt?'À démarrer':r.endedAt?'Terminée':'En cours';
-            return `<div class="race-row"><div><strong>${esc(r.name)}</strong><span>${runners.length} élèves · ${r.levels.map(esc).join(', ')} · ${r.sexes.join('/')}</span><small class="race-status ${r.endedAt?'done':r.startedAt?'live':''}">${status}${r.startedAt?` · ${done}/${runners.length} arrivés`:''}</small></div>
+            return `<div class="race-row"><div><strong>${esc(r.name)}</strong><span>${runners.length} élèves · ${r.levels.map(esc).join(', ')} · ${r.sexes.map(sexLabel).join('/')}</span><small class="race-status ${r.endedAt?'done':r.startedAt?'live':''}">${status}${r.startedAt?` · ${done}/${runners.length} arrivés`:''}</small></div>
               <div class="race-actions">${!r.startedAt?`<button class="button danger-ghost" data-delete="${r.id}">Supprimer</button>`:''}</div></div>`;
           }).join('') : '<p class="empty">Aucune course créée.</p>'}</div>
         </div>
