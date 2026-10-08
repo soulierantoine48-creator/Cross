@@ -2,7 +2,7 @@
   'use strict';
 
   const STORAGE_KEY = 'cross-college-state-v2';
-  const EMPTY = { students: [], races: [], arrivals: [], classTeachers: {}, crossDistanceM: 0, scannerSeen: false, scannerLastAt: 0, tab: 'students', notice: 'Scanner en attente', lastScan: '', resultRaceId: '' };
+  const EMPTY = { students: [], races: [], arrivals: [], classTeachers: {}, crossDistanceM: 0, scannerSeen: false, scannerLastAt: 0, tab: 'students', notice: 'Prêt', noticeKind: 'info', lastScan: '', resultRaceId: '', resultMode: 'courses' };
   const DEMO = [
     [101,'DUPONT','Lina','6A','6e','F','Mme Martin'], [102,'MARTIN','Noé','6A','6e','M','Mme Martin'],
     [103,'BERNARD','Inès','6B','6e','F','M. Robert'], [104,'PETIT','Lucas','6B','6e','M','M. Robert'],
@@ -17,9 +17,25 @@
   let manualQuery = '';
   let scanBuffer = '';
   let scanLastKey = 0;
+  let scanStartedAt = 0;
+  let openClass = '';
+  let studentEditorId = null;
+  let studentSearch = '';
+  let syncStatus = navigator.onLine ? 'pending' : 'offline';
+  let syncPending = true;
+  let syncTimer = null;
+  let syncBusy = false;
   const app = document.getElementById('app');
   const $ = s => document.querySelector(s);
   const uid = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  const SUPABASE_URL = 'https://kgqutmjvbqkqcrxbcizj.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_T-r0q95PauaFtoY79RoGpA_bh1EWmcZ';
+  const CLOUD_ID_KEY = 'cross-cloud-backup-id';
+  const CLOUD_SECRET_KEY = 'cross-cloud-backup-secret';
+  const cloudBackupId = localStorage.getItem(CLOUD_ID_KEY) || uid();
+  const cloudSecret = localStorage.getItem(CLOUD_SECRET_KEY) || uid();
+  localStorage.setItem(CLOUD_ID_KEY, cloudBackupId);
+  localStorage.setItem(CLOUD_SECRET_KEY, cloudSecret);
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const nameOf = s => `${String(s.lastName || '').toUpperCase()} ${s.firstName || ''}`.trim();
   const raceOf = id => state.races.find(r => r.id === id);
@@ -32,22 +48,114 @@
   const speedKmh = s => { if(!state.crossDistanceM || !s.elapsedMs) return null; return (state.crossDistanceM / (s.elapsedMs / 1000)) * 3.6; };
   const fmtSpeed = s => { const v=speedKmh(s); return v==null ? '—' : `${v.toFixed(1)} km/h`; };
   const classNames = () => [...new Set(state.students.map(s => s.className).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
+  const levelTone = level => ({'6e':'level-6','5e':'level-5','4e':'level-4','3e':'level-3'}[level] || 'level-x');
+
+  function bibIssues() {
+    const seen=new Map(), issues=[];
+    state.students.forEach(s=>{
+      const bib=Number(s.bib);
+      if(!Number.isInteger(bib) || bib<=0) issues.push(`${nameOf(s)} : dossard manquant/invalide`);
+      else {
+        if(seen.has(bib)) issues.push(`Dossard ${bib} en double : ${seen.get(bib)} / ${nameOf(s)}`);
+        else seen.set(bib,nameOf(s));
+      }
+      if(!['F','M'].includes(s.sex)) issues.push(`${nameOf(s)} : sexe non renseigné`);
+    });
+    return issues;
+  }
+
+  function classStats(cls) {
+    const a=state.students.filter(s=>s.className===cls);
+    return {students:a,total:a.length,girls:a.filter(s=>s.sex==='F').length,boys:a.filter(s=>s.sex==='M').length,level:a[0]?.level||''};
+  }
+
+  function currentLastArrival() {
+    const a=state.arrivals.at(-1);
+    if(!a) return null;
+    const s=state.students.find(x=>x.id===a.studentId);
+    return s ? {a,s} : null;
+  }
 
   function load() {
     try { return { ...EMPTY, ...(JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}) }; }
     catch { return { ...EMPTY }; }
   }
-  function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-  function notify(msg) { state.notice = msg; save(); render(); }
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    syncPending = true;
+    scheduleCloudSync();
+  }
+
+  function notify(msg, kind='info') {
+    state.notice = msg;
+    state.noticeKind = kind;
+    save();
+    render();
+  }
+
+  function updateSyncBadge() {
+    const el=document.getElementById('sync-badge');
+    if(!el) return;
+    const map={
+      synced:['●','Synchronisé','sync-ok'],
+      syncing:['↻','Sauvegarde…','sync-working'],
+      pending:['↻','À synchroniser','sync-working'],
+      offline:['●','Hors ligne · local sécurisé','sync-offline'],
+      error:['!','Sauvegarde cloud en attente','sync-error']
+    };
+    const [icon,label,cls]=map[syncStatus]||map.pending;
+    el.className=`sync-badge ${cls}`;
+    el.textContent=`${icon} ${label}`;
+  }
+
+  function scheduleCloudSync(delay=900) {
+    syncPending = true;
+    clearTimeout(syncTimer);
+    syncTimer=setTimeout(syncCloud,delay);
+  }
+
+  async function syncCloud() {
+    if(syncBusy || !syncPending) return;
+    if(!navigator.onLine){ syncStatus='offline'; updateSyncBadge(); return; }
+    syncBusy=true; syncPending=false; syncStatus='syncing'; updateSyncBadge();
+    try {
+      const response=await fetch(`${SUPABASE_URL}/rest/v1/cross_backups?on_conflict=backup_id`,{
+        method:'POST',
+        headers:{
+          'apikey':SUPABASE_KEY,
+          'Content-Type':'application/json',
+          'Prefer':'resolution=merge-duplicates,return=minimal',
+          'x-cross-secret':cloudSecret
+        },
+        body:JSON.stringify({backup_id:cloudBackupId,secret_token:cloudSecret,state,updated_at:new Date().toISOString()})
+      });
+      if(!response.ok) throw new Error(`HTTP ${response.status}`);
+      syncStatus='synced';
+    } catch(e) {
+      syncPending=true;
+      syncStatus=navigator.onLine?'error':'offline';
+    } finally {
+      syncBusy=false;
+      updateSyncBadge();
+      if(syncPending && navigator.onLine) scheduleCloudSync(5000);
+    }
+  }
 
   function render() {
-    const tabs = [['students','1. Élèves & dossards'],['races','2. Courses'],['timing','3. Chronométrage'],['results','4. Résultats']];
+    const tabs = [['students','1. Préparation'],['races','2. Courses'],['timing','3. Jour J'],['results','4. Résultats']];
     app.innerHTML = `<div class="app-shell">
-      <header class="topbar"><div><h1>Cross Collège</h1><p>Chronométrage iPad · dossards · résultats</p></div><div class="status-pill">${esc(state.notice)}</div></header>
+      <header class="topbar">
+        <div class="brand"><img src="./icon-180.png" alt=""><div><h1>Cross Ada Lovelace</h1><p>${state.students.length} élèves · ${classNames().length} classes · ${state.races.length} courses</p></div></div>
+        <div id="sync-badge" class="sync-badge"></div>
+      </header>
       <nav class="tabs">${tabs.map(([id,label]) => `<button data-tab="${id}" class="${state.tab===id?'active':''}">${label}</button>`).join('')}</nav>
-      <main>${page()}</main>${manualStamp !== null ? manualModal() : ''}
+      <main>${page()}</main>
+      ${openClass ? classModal() : ''}
+      ${studentEditorId !== null ? studentModal() : ''}
+      ${manualStamp !== null ? manualModal() : ''}
     </div>`;
     bind();
+    updateSyncBadge();
   }
 
   function page() {
