@@ -501,7 +501,8 @@
     document.querySelectorAll('[data-reopen]').forEach(b=>b.onclick=()=>reopenRace(b.dataset.reopen));
     $('#save-settings')?.addEventListener('click',saveSettings);
 
-    $('#no-bib')?.addEventListener('click',()=>{manualStamp=Date.now();manualQuery='';state.notice='Temps sans dossard figé';state.noticeKind='warning';save();render();});
+    $('#no-bib')?.addEventListener('click',()=>{ if(state.manualPending?.length){ manualStamp=state.manualPending[0]; manualQuery=''; render(); } else freezeNoBibTime(); });
+    $('#queue-no-bib')?.addEventListener('click',freezeNoBibTime);
     $('#close-modal')?.addEventListener('click',closeManual);
     $('#manual-search')?.addEventListener('input',e=>{
       manualQuery=e.target.value;
