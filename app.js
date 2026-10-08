@@ -556,6 +556,7 @@
 
   async function importStudents(file) {
     if (!file) return;
+    if(anyRaceStarted()) return notify('Import verrouillé après le premier départ. Supprime d’abord les courses de test si tu veux réimporter.','warning');
     try {
       let rows;
       if (file.name.toLowerCase().endsWith('.csv')) rows=parseCsv(await file.text());
@@ -624,6 +625,10 @@
     if(namePreview) namePreview.textContent=(levels.length===1&&sexes.length===1) ? raceAutoName(levels[0],sexes[0]) : 'Sélectionne un niveau et un sexe';
   }
 
+  function matchingRaceFor(level,sex,{unstartedOnly=true}={}) {
+    return state.races.find(r=>(!unstartedOnly || !r.startedAt) && !r.endedAt && r.levels?.includes(level) && r.sexes?.includes(sex));
+  }
+
   function saveStudentEditor() {
     const lastName=$('#student-last')?.value.trim()||'';
     const firstName=$('#student-first')?.value.trim()||'';
@@ -638,15 +643,23 @@
     if(duplicate) return notify(`Le dossard ${bib} est déjà attribué à ${nameOf(duplicate)}.`,'error');
 
     if(studentEditorId==='new'){
-      state.students.push({id:uid(),lastName,firstName,className,level:levelOf(className,''),sex,bib,raceId:null});
-      state.notice=`${lastName.toUpperCase()} ${firstName} ajouté à ${className}`;
+      const level=levelOf(className,'');
+      const matching=matchingRaceFor(level,sex);
+      const startedMatching=state.races.find(r=>r.startedAt&&!r.endedAt&&r.levels?.includes(level)&&r.sexes?.includes(sex));
+      state.students.push({id:uid(),lastName,firstName,className,level,sex,bib,raceId:matching?.id||null});
+      state.notice=matching
+        ? `${lastName.toUpperCase()} ${firstName} ajouté à ${className} et à la course ${matching.name}`
+        : startedMatching
+          ? `${lastName.toUpperCase()} ${firstName} ajouté · ATTENTION : ${startedMatching.name} a déjà démarré, élève non affecté`
+          : `${lastName.toUpperCase()} ${firstName} ajouté à ${className}`;
+      state.noticeKind=startedMatching&&!matching?'warning':'good';
     } else {
       const s=state.students.find(x=>x.id===studentEditorId);
       if(!s) return;
       Object.assign(s,{lastName,firstName,className,level:levelOf(className,''),sex,bib});
       state.notice=`${lastName.toUpperCase()} ${firstName} modifié`;
     }
-    state.noticeKind='good';
+    if(studentEditorId!=='new') state.noticeKind='good';
     openClass=className;
     studentEditorId=null;
     save(); render();
