@@ -34,6 +34,7 @@
   let syncTimer = null;
   let syncBusy = false;
   let raceClockTimer = null;
+  let scannerTestMode = false;
   const app = document.getElementById('app');
   const $ = s => document.querySelector(s);
   const uid = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -65,6 +66,8 @@
   };
   const classNames = () => [...new Set(state.students.map(s => s.className).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
   const levelTone = level => ({'6e':'level-6','5e':'level-5','4e':'level-4','3e':'level-3'}[level] || 'level-x');
+  const anyRaceStarted = () => state.races.some(r=>r.startedAt);
+  const sexLabel = sex => ({F:'Filles',M:'Garçons',X:'Non renseigné'}[sex] || sex || '');
 
   function bibIssues() {
     const seen=new Map(), issues=[];
@@ -129,11 +132,11 @@
     const el=document.getElementById('sync-badge');
     if(!el) return;
     const map={
-      synced:['●','Synchronisé','sync-ok'],
-      syncing:['↻','Sauvegarde…','sync-working'],
-      pending:['↻','À synchroniser','sync-working'],
-      offline:['●','Hors ligne · local sécurisé','sync-offline'],
-      error:['!','Sauvegarde cloud en attente','sync-error']
+      synced:['●','Sauvegarde cloud OK','sync-ok'],
+      syncing:['↻','Sauvegarde cloud…','sync-working'],
+      pending:['↻','Sauvegarde cloud en attente','sync-working'],
+      offline:['●','Hors ligne · données locales OK','sync-offline'],
+      error:['!','Cloud en attente · données locales OK','sync-error']
     };
     const [icon,label,cls]=map[syncStatus]||map.pending;
     el.className=`sync-badge ${cls}`;
