@@ -310,7 +310,7 @@
           <div class="day-stats"><div><strong>${pending}</strong><span>encore en course</span></div><div><strong>${done}</strong><span>arrivées enregistrées</span></div><div><strong>${active.length}</strong><span>courses actives</span></div></div>
 
           <div class="day-actions">
-            <button class="button no-bib-button" id="no-bib" ${active.length?'':'disabled'}>SANS DOSSARD</button>
+            <button class="button no-bib-button" id="no-bib" ${active.length?'':'disabled'}>${state.manualPending?.length?'REPRENDRE SANS DOSSARD · '+state.manualPending.length:'SANS DOSSARD'}</button>
             <button class="button undo-button" id="undo" ${last?'':'disabled'}>${last?`Annuler #${last.s.bib} · ${esc(nameOf(last.s))} · ${fmt(last.a.elapsedMs)}`:'Aucune arrivée à annuler'}</button>
           </div>
 
