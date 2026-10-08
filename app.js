@@ -3,6 +3,7 @@
 
   const STORAGE_KEY = 'cross-college-state-v2';
   const EMPTY = { students: [], races: [], arrivals: [], classTeachers: {}, crossDistanceM: 0, scannerSeen: false, scannerLastAt: 0, tab: 'students', notice: 'Prêt', noticeKind: 'info', lastScan: '', resultRaceId: '', resultMode: 'courses' };
+  const EPS_TEACHERS = ['Libourel','Soulier','Sabardeil','Ichou','Gourdon'];
   const DEMO = [
     [101,'DUPONT','Lina','6A','6e','F','Mme Martin'], [102,'MARTIN','Noé','6A','6e','M','Mme Martin'],
     [103,'BERNARD','Inès','6B','6e','F','M. Robert'], [104,'PETIT','Lucas','6B','6e','M','M. Robert'],
@@ -355,7 +356,11 @@
   function classModal() {
     const cls=openClass, x=classStats(cls), teacher=state.classTeachers?.[cls]?.[0]||'';
     return `<div class="modal-backdrop sheet-backdrop"><div class="modal class-modal"><div class="modal-head"><div><span class="eyebrow">${esc(x.level)}</span><h2>${esc(cls)}</h2><p>${x.total} élèves · ${x.girls} filles · ${x.boys} garçons</p></div><button class="close" id="close-class">×</button></div>
-      <div class="teacher-box"><label>Professeur d’EPS référent<input id="class-teacher" value="${esc(teacher)}" placeholder="Nom du professeur"></label><button class="button" id="save-class-teacher">Enregistrer</button></div>
+      <div class="teacher-box teacher-picker">
+        <div><span class="teacher-label">Professeur d’EPS référent</span><strong class="teacher-current">${teacher?esc(teacher):'À renseigner'}</strong></div>
+        <div class="teacher-options">${EPS_TEACHERS.map(name=>`<button class="teacher-choice ${teacher===name?'selected':''}" data-class-teacher-name="${esc(name)}">${esc(name)}</button>`).join('')}</div>
+        ${teacher?`<button class="teacher-clear" id="clear-class-teacher">Retirer l’attribution</button>`:''}
+      </div>
       <div class="class-actions"><button class="button primary" id="add-student">+ Ajouter un élève</button></div>
       <div class="class-students">${x.students.sort((a,b)=>nameOf(a).localeCompare(nameOf(b),'fr')).map(s=>`<button data-edit-student="${s.id}"><span class="student-bib">#${esc(s.bib||'—')}</span><strong>${esc(nameOf(s))}</strong><span>${s.sex==='F'?'Fille':s.sex==='M'?'Garçon':'Sexe ?'}</span><small>Modifier</small></button>`).join('')}</div>
     </div></div>`;
@@ -458,7 +463,8 @@
     $('#student-search')?.addEventListener('input',e=>{studentSearch=e.target.value;render();setTimeout(()=>{const x=$('#student-search');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}},0);});
     document.querySelectorAll('[data-open-class]').forEach(b=>b.onclick=()=>{openClass=b.dataset.openClass;render();});
     $('#close-class')?.addEventListener('click',()=>{openClass='';render();});
-    $('#save-class-teacher')?.addEventListener('click',()=>saveClassTeachers(openClass));
+    document.querySelectorAll('[data-class-teacher-name]').forEach(b=>b.onclick=()=>assignClassTeacher(openClass,b.dataset.classTeacherName));
+    $('#clear-class-teacher')?.addEventListener('click',()=>assignClassTeacher(openClass,''));
     $('#add-student')?.addEventListener('click',()=>{studentEditorId='new';render();});
     document.querySelectorAll('[data-edit-student]').forEach(b=>b.onclick=()=>{studentEditorId=b.dataset.editStudent;render();});
     $('#close-student')?.addEventListener('click',()=>{studentEditorId=null;render();});
@@ -755,9 +761,9 @@
     save(); render();
   }
 
-  function saveClassTeachers(className) {
+  function assignClassTeacher(className, teacher) {
     if(!className) return;
-    const teacher=$('#class-teacher')?.value.trim()||'';
+    if(teacher && !EPS_TEACHERS.includes(teacher)) return notify('Professeur non reconnu.','error');
     state.classTeachers ||= {};
     state.classTeachers[className]=teacher?[teacher]:[];
     state.notice=teacher?`${teacher} référent EPS de ${className}`:`Professeur EPS retiré pour ${className}`;
@@ -1134,13 +1140,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v24')){
-          sessionStorage.setItem('cross-browser-clean-v24','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v25')){
+          sessionStorage.setItem('cross-browser-clean-v25','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=24',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=25',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
