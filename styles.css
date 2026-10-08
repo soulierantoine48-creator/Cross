@@ -772,3 +772,37 @@ td b{color:#26364a}
   font-weight:900 !important;
   letter-spacing:.14em;
 }
+
+
+/* Sans dossard : plusieurs courses actives */
+.manual-groups{display:flex;flex-direction:column;gap:14px}
+.manual-race-group{
+  padding:10px;
+  border-radius:18px;
+  background:#f7f9fc;
+}
+.manual-race-title{
+  position:sticky;
+  top:0;
+  z-index:2;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:8px 10px 10px;
+  margin:-2px -2px 6px;
+  background:#f7f9fc;
+}
+.manual-race-title strong{
+  color:var(--navy);
+  font-size:15px;
+}
+.manual-race-title span{
+  color:#7f8b9d;
+  font-size:11px;
+  font-weight:800;
+}
+.manual-race-group .candidate-list button,
+.manual-race-group>button{
+  background:#fff;
+}
