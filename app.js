@@ -18,6 +18,8 @@
   let scanBuffer = '';
   let scanLastKey = 0;
   let scanStartedAt = 0;
+  let armedRaceId = '';
+  let manualSearchTimer = null;
   let openClass = '';
   let studentEditorId = null;
   let studentSearch = '';
@@ -29,7 +31,7 @@
   const $ = s => document.querySelector(s);
   const uid = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
   const SUPABASE_URL = 'https://kgqutmjvbqkqcrxbcizj.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_T-r0q95PauaFtoY79RoGpA_bh1EWmcZ';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtncXV0bWp2YnFrcWNyeGJjaXpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5MjY1NTUsImV4cCI6MjEwMzUwMjU1NX0.lmN-ZS4FGXTqjKbm-E2wIcApJk9fsKNAtF8Lnh9MZJM';
   const CLOUD_ID_KEY = 'cross-cloud-backup-id';
   const CLOUD_SECRET_KEY = 'cross-cloud-backup-secret';
   const cloudBackupId = localStorage.getItem(CLOUD_ID_KEY) || uid();
@@ -123,9 +125,10 @@
         method:'POST',
         headers:{
           'apikey':SUPABASE_KEY,
+          'Authorization':`Bearer ${SUPABASE_KEY}`,
           'Content-Type':'application/json',
           'Prefer':'resolution=merge-duplicates,return=minimal',
-          'x-cross-secret':cloudSecret
+          'X-Client-Info':`cross/${cloudSecret}`
         },
         body:JSON.stringify({backup_id:cloudBackupId,secret_token:cloudSecret,state,updated_at:new Date().toISOString()})
       });
@@ -243,11 +246,21 @@
     const pending=active.reduce((n,r)=>n+state.students.filter(s=>s.raceId===r.id&&s.elapsedMs==null).length,0);
     const done=state.students.filter(s=>s.elapsedMs!=null).length;
     const last=currentLastArrival();
+    const armed=upcoming.find(r=>r.id===armedRaceId)||null;
+    if(armedRaceId && !armed) armedRaceId='';
+
     return `<section class="day-page">
       <div class="day-statusbar">
         <span class="status-chip ${state.scannerSeen?'ok':''}">${state.scannerSeen?'● Scanner prêt':'○ Scanner non testé'}</span>
         <span class="status-chip">Parcours · ${state.crossDistanceM ? state.crossDistanceM+' m' : 'distance à régler'}</span>
         <span class="status-chip">${active.length} course${active.length>1?'s':''} en cours</span>
+      </div>
+
+      <div class="start-command">
+        <div class="start-command-copy"><span class="eyebrow">DÉPART</span><h2>${armed?esc(armed.name):'Préparer la prochaine course'}</h2><p>${armed?'Au signal, un seul appui enregistre l’heure exacte du départ.':'Choisis d’abord la course. Tu peux le faire pendant qu’une autre course est déjà en cours.'}</p></div>
+        ${armed ? `<div class="armed-actions"><button class="launch-race" id="launch-armed"><span>DÉPART</span><strong>${esc(armed.name)}</strong></button><button class="text-button" id="cancel-armed">Changer</button></div>`
+        : upcoming.length ? `<div class="prepare-races">${upcoming.map(r=>{const n=state.students.filter(s=>s.raceId===r.id).length;return `<button data-arm-race="${r.id}"><strong>${esc(r.name)}</strong><span>${n} élèves</span><em>Préparer</em></button>`;}).join('')}</div>`
+        : '<p class="empty">Toutes les courses ont été lancées.</p>'}
       </div>
 
       <div class="day-layout">
@@ -265,17 +278,13 @@
           </div>
 
           <div class="recent-arrivals"><div class="section-head"><h3>Dernières arrivées</h3><button class="text-button" id="test-scan">Tester le scanner</button></div>
-            ${state.arrivals.slice(-10).reverse().map(a=>{const s=state.students.find(x=>x.id===a.studentId);return s?`<div class="recent-arrival"><strong>#${s.bib} ${esc(nameOf(s))}</strong><span>${fmt(a.elapsedMs)} · ${esc(raceOf(a.raceId)?.name||'')}</span></div>`:'';}).join('') || '<p class="empty">Aucune arrivée enregistrée.</p>'}
+            ${state.arrivals.slice(-10).reverse().map(a=>{const s=state.students.find(x=>x.id===a.studentId);return s?`<div class="recent-arrival"><div><strong>#${s.bib} ${esc(nameOf(s))}</strong><small>${esc(s.className)} · ${esc(raceOf(a.raceId)?.name||'')}</small></div><span>${fmt(a.elapsedMs)}</span></div>`:'';}).join('') || '<p class="empty">Aucune arrivée enregistrée.</p>'}
           </div>
         </div>
 
         <aside class="day-side">
-          <div class="day-panel"><div class="section-head"><div><span class="eyebrow">DÉPARTS</span><h3>Courses à venir</h3></div></div>
-            <div class="race-list">${upcoming.length ? upcoming.map(r=>{const n=state.students.filter(s=>s.raceId===r.id).length;return `<div class="start-card"><div><strong>${esc(r.name)}</strong><span>${n} élèves</span></div><button class="start-now" data-start="${r.id}">DÉPART</button></div>`;}).join('') : '<p class="empty">Toutes les courses ont été lancées.</p>'}</div>
-          </div>
-
           <div class="day-panel"><div class="section-head"><div><span class="eyebrow">EN COURS</span><h3>Courses actives</h3></div></div>
-            <div class="race-list">${active.length ? active.map(r=>{const a=state.students.filter(s=>s.raceId===r.id), d=a.filter(s=>s.elapsedMs!=null).length;return `<div class="active-card"><div><strong>${esc(r.name)}</strong><span>Départ ${new Date(r.startedAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span><b>${d}/${a.length} arrivés</b></div><button class="finish-now" data-finish-race="${r.id}">TERMINER</button></div>`;}).join('') : '<p class="empty">Aucune course en cours.</p>'}</div>
+            <div class="race-list">${active.length ? active.map(r=>{const a=state.students.filter(s=>s.raceId===r.id), d=a.filter(s=>s.elapsedMs!=null).length;return `<div class="active-card"><div><strong>${esc(r.name)}</strong><span>Départ ${new Date(r.startedAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span><b>${d}/${a.length} arrivés</b></div><div class="progress"><i style="width:${a.length?Math.round(d/a.length*100):0}%"></i></div><button class="finish-now" data-finish-race="${r.id}">TERMINER</button></div>`;}).join('') : '<p class="empty">Aucune course en cours.</p>'}</div>
           </div>
 
           ${ended.length ? `<div class="day-panel compact-panel"><div class="section-head"><div><span class="eyebrow">TERMINÉES</span></div></div>${ended.slice(-4).reverse().map(r=>`<div class="ended-row"><span>${esc(r.name)}</span><button class="text-button" data-reopen="${r.id}">Réouvrir</button></div>`).join('')}</div>` : ''}
@@ -356,14 +365,24 @@
     document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{b.classList.toggle('selected');updateRaceCount();});
     $('#create-race')?.addEventListener('click',createRace);
     document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>deleteRace(b.dataset.delete));
-    document.querySelectorAll('[data-start]').forEach(b=>b.onclick=()=>startRace(b.dataset.start));
+    document.querySelectorAll('[data-arm-race]').forEach(b=>b.onclick=()=>{armedRaceId=b.dataset.armRace;render();});
+    $('#cancel-armed')?.addEventListener('click',()=>{armedRaceId='';render();});
+    $('#launch-armed')?.addEventListener('click',()=>{if(armedRaceId) startRace(armedRaceId);});
     document.querySelectorAll('[data-finish-race]').forEach(b=>b.onclick=()=>finishRace(b.dataset.finishRace));
     document.querySelectorAll('[data-reopen]').forEach(b=>b.onclick=()=>reopenRace(b.dataset.reopen));
     $('#save-settings')?.addEventListener('click',saveSettings);
 
     $('#no-bib')?.addEventListener('click',()=>{manualStamp=Date.now();manualQuery='';state.notice='Temps sans dossard figé';state.noticeKind='warning';save();render();});
     $('#close-modal')?.addEventListener('click',closeManual);
-    $('#manual-search')?.addEventListener('input',e=>{manualQuery=e.target.value;render();setTimeout(()=>{const x=$('#manual-search');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}},0);});
+    $('#manual-search')?.addEventListener('input',e=>{
+      manualQuery=e.target.value;
+      clearTimeout(manualSearchTimer);
+      manualSearchTimer=setTimeout(()=>{
+        if(manualStamp===null) return;
+        render();
+        setTimeout(()=>{const x=$('#manual-search');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}},0);
+      },260);
+    });
     document.querySelectorAll('[data-manual]').forEach(b=>b.onclick=()=>manualFinish(b.dataset.manual));
     $('#undo')?.addEventListener('click',undoLast);
     $('#test-scan')?.addEventListener('click',()=>notify('Mode test : scanne un dossard maintenant.','info'));
@@ -516,6 +535,7 @@
     if(!state.crossDistanceM){ state.tab='races'; return notify('Renseigne la distance avant le premier départ.','warning'); }
     r.startedAt=Date.now();
     delete r.endedAt;
+    armedRaceId='';
     state.notice=`${r.name} · DÉPART enregistré à ${new Date(r.startedAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
     state.noticeKind='good';
     state.tab='timing';
@@ -803,7 +823,8 @@
     const issues=bibIssues();
     if(issues.length) throw new Error(`Impossible de créer les dossards : ${issues.length} anomalie(s). ${issues[0]}`);
     if(!window.JsBarcode || !window.QRCode) throw new Error('Modules QR / Code 128 indisponibles.');
-    for(const s of state.students){
+    for(let i=0;i<state.students.length;i++){
+      const s=state.students[i];
       const value=String(s.bib);
       const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
       JsBarcode(svg,value,{format:'CODE128',displayValue:false,height:40,margin:8,width:2});
@@ -811,6 +832,7 @@
       const holder=document.createElement('div');
       new QRCode(holder,{text:value,width:128,height:128,correctLevel:QRCode.CorrectLevel.H});
       if(!holder.querySelector('canvas') && !holder.querySelector('img')) throw new Error(`QR invalide pour le dossard ${value}`);
+      if(i%25===24) await new Promise(resolve=>requestAnimationFrame(resolve));
     }
     return true;
   }
