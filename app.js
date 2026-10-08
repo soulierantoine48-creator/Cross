@@ -799,8 +799,28 @@
     return 159;
   }
 
+  async function preflightBibs() {
+    const issues=bibIssues();
+    if(issues.length) throw new Error(`Impossible de créer les dossards : ${issues.length} anomalie(s). ${issues[0]}`);
+    if(!window.JsBarcode || !window.QRCode) throw new Error('Modules QR / Code 128 indisponibles.');
+    for(const s of state.students){
+      const value=String(s.bib);
+      const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      JsBarcode(svg,value,{format:'CODE128',displayValue:false,height:40,margin:8,width:2});
+      if(svg.querySelectorAll('rect').length<2) throw new Error(`Code 128 invalide pour le dossard ${value}`);
+      const holder=document.createElement('div');
+      new QRCode(holder,{text:value,width:128,height:128,correctLevel:QRCode.CorrectLevel.H});
+      if(!holder.querySelector('canvas') && !holder.querySelector('img')) throw new Error(`QR invalide pour le dossard ${value}`);
+    }
+    return true;
+  }
+
   async function exportBibs() {
-    if(!window.jspdf?.jsPDF || !window.JsBarcode || !window.QRCode) return notify('Module dossards indisponible. Recharge avec Internet.');
+    if(!window.jspdf?.jsPDF || !window.JsBarcode || !window.QRCode) return notify('Module dossards indisponible. Recharge avec Internet.','error');
+    try {
+      state.notice=`Contrôle de ${state.students.length} dossards…`; state.noticeKind='info'; render();
+      await preflightBibs();
+    } catch(e) { return notify(e.message || 'Contrôle des dossards impossible.','error'); }
 
     let backgroundData;
     try { backgroundData=buildBibBackgroundData(); }
@@ -850,6 +870,9 @@
     });
 
     doc.save('dossards-cross-ada-lovelace-2026.pdf');
+    state.notice=`${state.students.length}/${state.students.length} dossards contrôlés et générés`;
+    state.noticeKind='good';
+    save(); render();
   }
 
   function downloadTemplate(){ downloadBlob('\uFEFFNom;Prénom;Classe;Niveau;Sexe;Enseignant;Dossard\nDUPONT;Lina;6A;6e;F;Mme Martin;1\nMARTIN;Noé;6A;6e;M;Mme Martin;2\n','modele-eleves-cross.csv','text/csv;charset=utf-8'); }
@@ -857,13 +880,38 @@
   function downloadBlob(content,name,type){ const blob=new Blob([content],{type}), a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 
   document.addEventListener('keydown', e => {
-    if(state.tab !== 'timing' || manualStamp !== null) return;
-    const t=e.target; if(t && ['INPUT','TEXTAREA','SELECT'].includes(t.tagName)) return;
-    const now=performance.now(); if(now-scanLastKey>250) scanBuffer=''; scanLastKey=now;
-    if(e.key==='Enter' || e.key==='Tab'){ const code=scanBuffer.trim(); scanBuffer=''; if(code){e.preventDefault();scan(code);} return; }
-    if(e.key.length===1 && !e.metaKey && !e.ctrlKey && !e.altKey) scanBuffer += e.key;
+    if(state.tab!=='timing') return;
+    const now=performance.now();
+    if(e.key==='Enter' || e.key==='Tab'){
+      const fast=scanBuffer.length>=3 && (now-scanStartedAt)<1000;
+      const code=scanBuffer;
+      scanBuffer='';
+      if(fast){
+        e.preventDefault();
+        if(manualStamp!==null && manualQuery.endsWith(code)) manualQuery=manualQuery.slice(0,-code.length).trim();
+        scan(code);
+      }
+      return;
+    }
+    if(/^\d$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey){
+      if(!scanBuffer || now-scanLastKey<120){
+        if(!scanBuffer) scanStartedAt=now;
+        scanBuffer+=e.key;
+      } else {
+        scanBuffer=e.key;
+        scanStartedAt=now;
+      }
+      scanLastKey=now;
+      return;
+    }
+    if(now-scanLastKey>150) scanBuffer='';
   }, true);
+
+  window.addEventListener('online',()=>{syncStatus='pending';scheduleCloudSync(100);updateSyncBadge();});
+  window.addEventListener('offline',()=>{syncStatus='offline';updateSyncBadge();});
+  setInterval(()=>{if(syncPending) syncCloud();},15000);
 
   if('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
   render();
+  scheduleCloudSync(250);
 })();
