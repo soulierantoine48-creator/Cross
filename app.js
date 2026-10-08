@@ -297,7 +297,7 @@
         <div class="start-command-copy"><span class="eyebrow">DÉPART</span><h2>${armed?esc(armed.name):'Préparer la prochaine course'}</h2><p>${armed?'Au signal, un seul appui enregistre l’heure exacte du départ.':'Choisis d’abord la course. Tu peux le faire pendant qu’une autre course est déjà en cours.'}</p></div>
         ${armed ? `<div class="armed-actions"><button class="launch-race" id="launch-armed"><span>DÉPART</span><strong>${esc(armed.name)}</strong></button><button class="text-button" id="cancel-armed">Changer</button></div>`
         : upcoming.length ? `<div class="prepare-races">${upcoming.map(r=>{const n=state.students.filter(s=>s.raceId===r.id).length;return `<button data-arm-race="${r.id}"><strong>${esc(r.name)}</strong><span>${n} élèves</span><em>Préparer</em></button>`;}).join('')}</div>`
-        : '<p class="empty">Toutes les courses ont été lancées.</p>'}
+        : '<div class="all-started"><strong>Tous les départs sont lancés</strong><span>Concentre-toi maintenant sur les arrivées.</span></div>'}
       </div>
 
       <div class="day-layout">
@@ -314,7 +314,7 @@
             <button class="button undo-button" id="undo" ${last?'':'disabled'}>${last?`Annuler #${last.s.bib} · ${esc(nameOf(last.s))} · ${fmt(last.a.elapsedMs)}`:'Aucune arrivée à annuler'}</button>
           </div>
 
-          <div class="recent-arrivals"><div class="section-head"><h3>Dernières arrivées</h3><button class="text-button" id="test-scan">Tester le scanner</button></div>
+          <div class="recent-arrivals"><div class="section-head"><h3>Dernières arrivées</h3><button class="text-button ${scannerTestMode?'test-active':''}" id="test-scan">${scannerTestMode?'Test en attente…':'Tester le scanner'}</button></div>
             ${state.arrivals.slice(-10).reverse().map(a=>{const s=state.students.find(x=>x.id===a.studentId);return s?`<div class="recent-arrival"><div><strong>#${s.bib} ${esc(nameOf(s))}</strong><small>${esc(s.className)} · ${esc(raceOf(a.raceId)?.name||'')}</small></div><span>${fmt(a.elapsedMs)}</span></div>`:'';}).join('') || '<p class="empty">Aucune arrivée enregistrée.</p>'}
           </div>
         </div>
