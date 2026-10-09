@@ -384,7 +384,7 @@
   function bibClassPickerModal() {
     const classes=classNames();
     return `<div class="modal-backdrop"><div class="modal bib-class-modal">
-      <div class="modal-head"><div><span class="eyebrow">DOSSARDS PDF</span><h2>Choisir une classe</h2><p>Un PDF séparé par classe, en qualité maximale.</p></div><button class="close" id="close-bib-class-picker">×</button></div>
+      <div class="modal-head"><div><span class="eyebrow">DOSSARDS PDF</span><h2>Choisir une classe</h2><p>Un PDF par classe · 2 dossards A5 par page A4 · qualité maximale.</p></div><button class="close" id="close-bib-class-picker">×</button></div>
       <div class="bib-class-grid">${classes.map(cls=>{
         const x=classStats(cls);
         return `<button class="bib-class-choice ${levelTone(x.level)}" data-export-bibs-class="${esc(cls)}"><span>${esc(x.level)}</span><strong>${esc(cls)}</strong><small>${x.total} élèves</small></button>`;
@@ -1226,6 +1226,20 @@
     return true;
   }
 
+  function scaledBibDocument(pdf,scale,top) {
+    // Applique la même réduction à tous les éléments du dossard, textes et codes inclus.
+    return {
+      addImage:(data,format,x,y,w,h,...options)=>pdf.addImage(data,format,x*scale,top+y*scale,w*scale,h*scale,...options),
+      rect:(x,y,w,h,style)=>pdf.rect(x*scale,top+y*scale,w*scale,h*scale,style),
+      text:(value,x,y,options)=>pdf.text(value,x*scale,top+y*scale,options),
+      setFont:(...args)=>pdf.setFont(...args),
+      setFontSize:size=>pdf.setFontSize(size*scale),
+      getTextWidth:value=>pdf.getTextWidth(value)/scale,
+      setTextColor:(...args)=>pdf.setTextColor(...args),
+      setFillColor:(...args)=>pdf.setFillColor(...args)
+    };
+  }
+
   async function exportBibs(className, triggerButton=null) {
     if(!window.jspdf?.jsPDF || !window.JsBarcode || !window.QRCode) return notify('Module dossards indisponible. Recharge avec Internet.','error');
     const students=state.students.filter(s=>s.className===className);
@@ -1244,12 +1258,18 @@
 
       // Qualité maximale identique à l'ancienne génération.
       const {jsPDF}=window.jspdf;
-      const doc=new jsPDF({unit:'mm',format:'a4',orientation:'landscape'});
+      const pdf=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
       const W=297,H=210,centerX=W/2,total=students.length;
+      const pageWidth=pdf.internal.pageSize.getWidth();
+      const pageHeight=pdf.internal.pageSize.getHeight();
+      const scale=Math.min(pageWidth/W,(pageHeight/2)/H);
+      const slotMargin=(pageHeight/2-H*scale)/2;
 
       for(let i=0;i<total;i++){
         const s=students[i];
-        if(i) doc.addPage('a4','landscape');
+        if(i>0 && i%2===0) pdf.addPage('a4','portrait');
+        const top=(i%2)*(pageHeight/2)+slotMargin;
+        const doc=scaledBibDocument(pdf,scale,top);
 
         doc.addImage(backgroundData,'PNG',0,0,W,H,'bibBackgroundHD','FAST');
         doc.setFont('helvetica','bold');
@@ -1294,9 +1314,9 @@
       await new Promise(resolve=>setTimeout(resolve,0));
 
       const safeClass=String(className).replace(/[^a-zA-Z0-9_-]/g,'-');
-      doc.save(`dossards-${safeClass}-cross-ada-lovelace-2026.pdf`);
+      pdf.save(`dossards-${safeClass}-cross-ada-lovelace-2026-a5.pdf`);
 
-      state.notice=`${className} · ${total} dossards générés en qualité maximale`;
+      state.notice=`${className} · ${total} dossards A5 · ${Math.ceil(total/2)} pages A4 · qualité maximale`;
       state.noticeKind='good';
       bibClassPickerOpen=false;
       save();
@@ -1374,13 +1394,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v32')){
-          sessionStorage.setItem('cross-browser-clean-v32','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v33')){
+          sessionStorage.setItem('cross-browser-clean-v33','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=32',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=33',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
