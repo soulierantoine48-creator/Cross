@@ -96,6 +96,26 @@
     return s ? {a,s} : null;
   }
 
+  function applyRequestedStudentAddition() {
+    const update='marla-vidal-6a-2026-10-12';
+    if(state.appliedStudentUpdates?.[update]) return false;
+    // Mise à jour ciblée de la liste Ada Lovelace, sans ajouter d'élève aux listes de démonstration.
+    const matches=(last,first)=>state.students.some(s=>s.className==='6A' && String(s.lastName).toUpperCase()===last && String(s.firstName).toLowerCase()===first);
+    if(!matches('BENEZET','julia') || !matches('CHAPUIS','marley')) return false;
+    const exists=state.students.some(s=>String(s.lastName).trim().toLowerCase()==='vidal' && String(s.firstName).trim().toLowerCase()==='marla');
+    if(!exists){
+      const used=new Set(state.students.map(s=>Number(s.bib)));
+      let bib=6061; while(used.has(bib)) bib++;
+      const race=matchingRaceFor('6e','F');
+      state.students.push({id:'student-marla-vidal-6a-2026',lastName:'VIDAL',firstName:'Marla',className:'6A',level:'6e',sex:'F',bib,raceId:race?.id||null});
+      state.notice=`Marla VIDAL ajoutée en 6A · dossard #${bib}`;
+      state.noticeKind='good';
+    }
+    state.appliedStudentUpdates={...state.appliedStudentUpdates,[update]:true};
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+    return !exists;
+  }
+
   function load() {
     try { return { ...EMPTY, ...(JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}) }; }
     catch { return { ...EMPTY }; }
@@ -399,6 +419,7 @@
     return `<div class="modal-backdrop editor-backdrop"><div class="modal student-modal"><div class="modal-head"><div><span class="eyebrow">${isNew?'NOUVEL ÉLÈVE':'MODIFIER'}</span><h2>${isNew?'Ajouter un élève':esc(nameOf(s))}</h2></div><button class="close" id="close-student">×</button></div>
       <div class="form-grid"><label>Nom<input id="student-last" value="${esc(s.lastName)}"></label><label>Prénom<input id="student-first" value="${esc(s.firstName)}"></label><label>Classe<input id="student-class" value="${esc(s.className)}"></label><label>Sexe<select id="student-sex"><option value="F" ${s.sex==='F'?'selected':''}>Fille</option><option value="M" ${s.sex==='M'?'selected':''}>Garçon</option><option value="X" ${s.sex==='X'?'selected':''}>Non renseigné</option></select></label><label>Dossard<input id="student-bib" type="number" inputmode="numeric" value="${esc(s.bib||'')}"></label></div>
       <button class="button primary full" id="save-student">${isNew?'Ajouter':'Enregistrer'}</button>
+      ${!isNew?`<button class="button full" id="export-student-bib" data-student-id="${esc(s.id)}">Enregistrer et exporter ce dossard (A5)</button>`:''}
     </div></div>`;
   }
 
@@ -499,6 +520,13 @@
     document.querySelectorAll('[data-edit-student]').forEach(b=>b.onclick=()=>{studentEditorId=b.dataset.editStudent;render();});
     $('#close-student')?.addEventListener('click',()=>{studentEditorId=null;render();});
     $('#save-student')?.addEventListener('click',saveStudentEditor);
+    $('#export-student-bib')?.addEventListener('click',e=>{
+      const id=e.currentTarget.dataset.studentId;
+      saveStudentEditor();
+      if(studentEditorId!==null) return;
+      const student=state.students.find(s=>s.id===id);
+      if(student) exportBibs(student.className,null,id);
+    });
 
     document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>{
       const wasSelected=b.classList.contains('selected');
@@ -1240,10 +1268,10 @@
     };
   }
 
-  async function exportBibs(className, triggerButton=null) {
+  async function exportBibs(className, triggerButton=null, studentId=null) {
     if(!window.jspdf?.jsPDF || !window.JsBarcode || !window.QRCode) return notify('Module dossards indisponible. Recharge avec Internet.','error');
-    const students=state.students.filter(s=>s.className===className);
-    if(!students.length) return notify(`Aucun élève dans ${className}.`,'warning');
+    const students=state.students.filter(s=>studentId?s.id===studentId:s.className===className);
+    if(!students.length) return notify('Aucun élève à exporter.','warning');
 
     const button=triggerButton instanceof HTMLElement ? triggerButton : null;
     const originalLabel=button?.textContent||'PDF';
@@ -1314,7 +1342,7 @@
       await new Promise(resolve=>setTimeout(resolve,0));
 
       const safeClass=String(className).replace(/[^a-zA-Z0-9_-]/g,'-');
-      pdf.save(`dossards-${safeClass}-cross-ada-lovelace-2026-a5.pdf`);
+      pdf.save(studentId?`dossard-${students[0].bib}-${safeClass}-cross-ada-lovelace-2026-a5.pdf`:`dossards-${safeClass}-cross-ada-lovelace-2026-a5.pdf`);
 
       state.notice=`${className} · ${total} dossards A5 · ${Math.ceil(total/2)} pages A4 · qualité maximale`;
       state.noticeKind='good';
@@ -1394,16 +1422,17 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v33')){
-          sessionStorage.setItem('cross-browser-clean-v33','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v34')){
+          sessionStorage.setItem('cross-browser-clean-v34','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=33',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=34',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
+  applyRequestedStudentAddition();
   render();
   scheduleCloudSync(250);
 })();
