@@ -254,10 +254,10 @@
         ${q ? `<div class="search-results">${matches.length ? matches.map(s=>`<button data-edit-student="${s.id}"><strong>#${esc(s.bib||'—')} · ${esc(nameOf(s))}</strong><span>${esc(s.className)} · ${s.sex==='F'?'Fille':s.sex==='M'?'Garçon':'Sexe ?'}</span></button>`).join('') : '<p class="empty">Aucun élève trouvé.</p>'}</div>` : ''}
       </div>
 
-      <div class="section-head"><div><h3>Classes</h3><p>Une couleur par niveau. Ouvre une classe pour gérer les élèves et son professeur d’EPS référent.</p></div></div>
+      <div class="section-head"><div><h3>Classes</h3><p>Une couleur par niveau. Ouvre une classe pour gérer les élèves et ses professeurs d’EPS (deux maximum).</p></div></div>
       <div class="class-grid">
         ${classNames().map(cls=>{
-          const x=classStats(cls), teacher=state.classTeachers?.[cls]?.[0]||'Prof EPS à renseigner';
+          const x=classStats(cls), teacher=state.classTeachers?.[cls]?.join(' · ')||'Prof EPS à renseigner';
           return `<button class="class-card ${levelTone(x.level)}" data-open-class="${esc(cls)}">
             <span class="class-level">${esc(x.level||'')}</span>
             <strong>${esc(cls)}</strong>
@@ -389,12 +389,13 @@
   }
 
   function classModal() {
-    const cls=openClass, x=classStats(cls), teacher=state.classTeachers?.[cls]?.[0]||'';
+    const cls=openClass, x=classStats(cls), teachers=state.classTeachers?.[cls]||[];
     return `<div class="modal-backdrop sheet-backdrop"><div class="modal class-modal"><div class="modal-head"><div><span class="eyebrow">${esc(x.level)}</span><h2>${esc(cls)}</h2><p>${x.total} élèves · ${x.girls} filles · ${x.boys} garçons</p></div><button class="close" id="close-class">×</button></div>
       <div class="teacher-box teacher-picker">
-        <div><span class="teacher-label">Professeur d’EPS référent</span><strong class="teacher-current">${teacher?esc(teacher):'À renseigner'}</strong></div>
-        <div class="teacher-options">${EPS_TEACHERS.map(name=>`<button class="teacher-choice ${teacher===name?'selected':''}" data-class-teacher-name="${esc(name)}">${esc(name)}</button>`).join('')}</div>
-        ${teacher?`<button class="teacher-clear" id="clear-class-teacher">Retirer l’attribution</button>`:''}
+        <div><span class="teacher-label">Professeurs d’EPS · 2 maximum</span><strong class="teacher-current">${teachers.length?esc(teachers.join(' · ')):'À renseigner'}</strong></div>
+        <div class="teacher-options">${EPS_TEACHERS.map(name=>`<button class="teacher-choice ${teachers.includes(name)?'selected':''}" aria-pressed="${teachers.includes(name)}" data-class-teacher-name="${esc(name)}">${esc(name)}</button>`).join('')}</div>
+        <p class="edit-help">Sélectionne un ou deux professeurs. Reclique sur un nom pour le retirer. Les résultats comptent pour chacun.</p>
+        ${teachers.length?`<button class="teacher-clear" id="clear-class-teacher">Retirer les attributions</button>`:''}
       </div>
       <div class="class-actions"><button class="button" data-export-bibs-class="${esc(cls)}">PDF des dossards</button><button class="button primary" id="add-student">+ Ajouter un élève</button></div>
       <div class="class-students">${x.students.sort((a,b)=>nameOf(a).localeCompare(nameOf(b),'fr')).map(s=>`<button data-edit-student="${s.id}"><span class="student-bib">#${esc(s.bib||'—')}</span><strong>${esc(nameOf(s))}</strong><span>${s.sex==='F'?'Fille':s.sex==='M'?'Garçon':'Sexe ?'}</span><small>Modifier</small></button>`).join('')}</div>
@@ -651,7 +652,7 @@
           if(!classTeachers[s.className].includes(s.teacher)) classTeachers[s.className].push(s.teacher);
         }
       });
-      Object.keys(classTeachers).forEach(k=>classTeachers[k]=classTeachers[k].slice(0,1));
+      Object.keys(classTeachers).forEach(k=>classTeachers[k]=classTeachers[k].slice(0,2));
 
       state={...EMPTY,students,classTeachers,notice:`${students.length} élèves importés`,noticeKind:'good'};
       openClass=''; studentEditorId=null; studentSearch='';
@@ -869,8 +870,17 @@
     if(!className) return;
     if(teacher && !EPS_TEACHERS.includes(teacher)) return notify('Professeur non reconnu.','error');
     state.classTeachers ||= {};
-    state.classTeachers[className]=teacher?[teacher]:[];
-    state.notice=teacher?`${teacher} référent EPS de ${className}`:`Professeur EPS retiré pour ${className}`;
+    const current=[...new Set(state.classTeachers[className]||[])];
+    let selected=[];
+    if(teacher){
+      if(current.includes(teacher)) selected=current.filter(name=>name!==teacher);
+      else {
+        if(current.length>=2) return notify('Deux professeurs maximum : retire un nom avant d’en choisir un autre.','warning');
+        selected=[...current,teacher];
+      }
+    }
+    state.classTeachers[className]=selected;
+    state.notice=selected.length?`${className} · EPS : ${selected.join(' et ')}`:`Professeurs EPS retirés pour ${className}`;
     state.noticeKind='good';
     save(); render();
   }
@@ -1422,13 +1432,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v34')){
-          sessionStorage.setItem('cross-browser-clean-v34','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v35')){
+          sessionStorage.setItem('cross-browser-clean-v35','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=34',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=35',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
