@@ -116,6 +116,33 @@
     return !exists;
   }
 
+  function applyRequestedTimeCorrection() {
+    const key='4e-boys-plus60-2026-10-14-1254';
+    if(state.appliedTimeCorrections?.[key]) return;
+    const corrections=[{"id":"41927932-9a61-443a-9e87-e84d60aed749","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":532689,"finishedAt":1791961272417},{"id":"c66a6028-7789-47dd-8bdc-6fe927c8ca7c","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":639120,"finishedAt":1791961378848},{"id":"e47af27f-f417-4aef-bbad-9213bb21e167","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":379841,"finishedAt":1791961119569},{"id":"245de5a6-402d-4558-8686-463ba27d3cda","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":672356,"finishedAt":1791961412084},{"id":"960df190-4d6b-4906-be01-ae2a8289314c","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":608320,"finishedAt":1791961348048},{"id":"5f9aae52-c0fb-49f7-a7dd-f70793ff2efe","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":401948,"finishedAt":1791961141676},{"id":"32d9f9bf-120f-4b34-8a4c-046dd36e766d","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":349843,"finishedAt":1791961089571},{"id":"2569e215-c9a0-4c8d-bf25-b6f06f25a9a2","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":445781,"finishedAt":1791961185509},{"id":"bf784940-ac3c-4ba4-a63a-06dfc7b6f204","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":485202,"finishedAt":1791961224930},{"id":"d98f6457-598c-4fbc-8a0e-bfebc2f0db75","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":447883,"finishedAt":1791961187611},{"id":"f50f4ff4-05ca-46bb-b0cf-65c8c2f1e610","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":570793,"finishedAt":1791961310521},{"id":"3f1f5d66-d2ed-4c66-b9e7-37cf3554f49d","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":415371,"finishedAt":1791961155099},{"id":"269a62d9-ec6d-4a7b-8f17-baa079494b29","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":546387,"finishedAt":1791961286115},{"id":"9160f2a8-77c5-4ad3-a157-dc8b2f4a40a6","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":409994,"finishedAt":1791961149722},{"id":"adee4629-9420-4665-803f-b72bc6d21934","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":372164,"finishedAt":1791961111892},{"id":"639645a7-2634-4f8a-a3b9-46f5421b9372","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":361725,"finishedAt":1791961101453},{"id":"cf749607-8a04-4e1e-b66a-f74cc302e27f","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":327863,"finishedAt":1791961067591},{"id":"0cffa4f5-b6f8-40e2-b26a-eb39a8e0d1b4","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":400689,"finishedAt":1791961140417},{"id":"ea084096-b6c5-46ec-9591-3572d32ef1d5","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":484259,"finishedAt":1791961223987},{"id":"30b8808a-578c-49e5-8fcb-66ac335f0017","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":336927,"finishedAt":1791961076655},{"id":"e0f7ec54-2241-4bbb-a09d-9fae2881e3a7","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":574779,"finishedAt":1791961314507},{"id":"e74731be-a681-431d-91c6-babd449d5c4e","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":450208,"finishedAt":1791961189936},{"id":"67086793-10e8-4ef8-b374-02471a0a90d0","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":488397,"finishedAt":1791961228125},{"id":"1f088ce6-9524-4606-a0ef-c3b3ec81563e","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":393459,"finishedAt":1791961133187},{"id":"12008f93-255d-41d9-9168-ff6421ae6008","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":322811,"finishedAt":1791961062539},{"id":"47bad346-5958-4d46-95ab-929f9eb9e756","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":421200,"finishedAt":1791961160928},{"id":"dc09d4b8-d436-46c2-af19-a6884e03ae5e","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":383754,"finishedAt":1791961123482},{"id":"ebea41dc-5e40-4b20-ad32-bfb0ae8c8300","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":492825,"finishedAt":1791961232553},{"id":"2ef4c8cc-afa5-428c-abe7-4d8f71d762de","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":395560,"finishedAt":1791961135288},{"id":"af2dbde7-9498-4724-aa82-f073dc4d5ad6","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":439344,"finishedAt":1791961179072},{"id":"ef78884c-714a-4a5f-9359-b179f70d021d","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":508092,"finishedAt":1791961247820},{"id":"f2bca6c7-9ba5-43a5-aa2d-de3a7a7e70e7","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":600237,"finishedAt":1791961339965},{"id":"8bf46026-fc2a-4e4b-8072-b5e053672e87","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":375358,"finishedAt":1791961115086},{"id":"9d7dd663-468a-4600-8e73-ab98c1013c27","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":363851,"finishedAt":1791961103579},{"id":"72ee0c8a-0440-4835-b9c7-b2538ed74271","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":433808,"finishedAt":1791961173536},{"id":"142dc493-d173-4e1a-a009-d75e547b5929","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":521123,"finishedAt":1791961260851},{"id":"e32207c1-f897-433b-b9e4-cc29b57bb966","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":506816,"finishedAt":1791961246544},{"id":"bb6eba62-244c-413d-85f2-e3e30518a199","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":311514,"finishedAt":1791961051242},{"id":"e7cb9bd9-481d-4204-9f61-66a97f1dfc84","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":347574,"finishedAt":1791961087302},{"id":"edc1ecda-8f89-4dc8-a376-e9c8e076aabc","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":305109,"finishedAt":1791961044837},{"id":"b32bcddc-2649-40f9-94a3-ee3a94a551e0","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":414037,"finishedAt":1791961153765},{"id":"d3ff7c23-ef33-4c3d-a5b4-c010b32adca4","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":265495,"finishedAt":1791961005223},{"id":"72364d3c-e79c-47ad-84b4-db7734c2bb30","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":344590,"finishedAt":1791961084318},{"id":"d5f1f8f6-e058-433b-a1af-10fa11f9e0f6","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":610934,"finishedAt":1791961350662},{"id":"8d28fd81-cc2a-4ddb-9ae3-d18699f29b30","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":566099,"finishedAt":1791961305827},{"id":"89d03f81-39b1-4d1d-8628-a37996d6ca59","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":700441,"finishedAt":1791961440169},{"id":"7d1342b7-2659-4e0d-b201-8da373e132e1","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":436751,"finishedAt":1791961176479},{"id":"bae1e607-60a7-4d89-a967-05a49fa7d0a8","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":406525,"finishedAt":1791961146253},{"id":"f5928c5a-49f8-45b6-a715-6bdaa3751970","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":530520,"finishedAt":1791961270248},{"id":"1a695765-221b-4787-bb14-3e3ccabc0df0","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":453570,"finishedAt":1791961193298},{"id":"626df0da-6141-4581-9b94-c1f25f686fe0","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":467759,"finishedAt":1791961207487},{"id":"de7cf236-37ac-4a6f-983d-11586390b983","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":346407,"finishedAt":1791961086135},{"id":"feba29b6-c814-4baf-94da-ff6a889fa50e","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":687169,"finishedAt":1791961426897},{"id":"16a6bd24-d5de-49e5-91de-b67a3d864cff","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":567148,"finishedAt":1791961306876},{"id":"bd0cf320-b543-4293-96d5-ed0dc25792d8","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":470428,"finishedAt":1791961210156},{"id":"7be21510-88ce-46fc-90fb-f9c431e0691b","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":690854,"finishedAt":1791961430582},{"id":"b4a549b5-f210-4c14-9198-e32b3a327702","raceId":"5a341544-f0c5-493c-82f6-19da0c2bc73b","elapsedMs":673810,"finishedAt":1791961413538}];
+    let found=0,changed=0;
+    for(const correction of corrections){
+      const student=state.students.find(s=>s.id===correction.id && s.raceId===correction.raceId && s.level==='4e' && s.sex==='M');
+      if(!student) continue;
+      found++;
+      if(student.elapsedMs!==correction.elapsedMs) continue;
+      student.elapsedMs+=60000;
+      if(Number.isFinite(student.finishedAt)) student.finishedAt+=60000;
+      for(const arrival of state.arrivals){
+        if(arrival.studentId===student.id && arrival.raceId===student.raceId && arrival.elapsedMs===correction.elapsedMs){
+          arrival.elapsedMs+=60000;
+          if(Number.isFinite(arrival.stamp)) arrival.stamp+=60000;
+          arrival.method='corrected';
+        }
+      }
+      changed++;
+    }
+    if(!found) return;
+    state.appliedTimeCorrections={...state.appliedTimeCorrections,[key]:true};
+    if(changed){state.notice=`4e garçons · +1 minute sur ${changed} résultats`;state.noticeKind='good';}
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+  }
+
   function load() {
     try { return { ...EMPTY, ...(JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}) }; }
     catch { return { ...EMPTY }; }
@@ -1468,17 +1495,18 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v38')){
-          sessionStorage.setItem('cross-browser-clean-v38','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v39')){
+          sessionStorage.setItem('cross-browser-clean-v39','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=38',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=39',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
   applyRequestedStudentAddition();
+  applyRequestedTimeCorrection();
   render();
   scheduleCloudSync(250);
 })();
