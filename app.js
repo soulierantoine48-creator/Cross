@@ -379,7 +379,7 @@
       content=`<div class="card table-card college-overall"><h3>Classement des classes du collège</h3><p class="comparison-help">Classes classées selon le temps moyen de leurs élèves arrivés.</p>${rowsTable(g.classOverall,true)}</div><div class="college-level-grid">${[...levels,...extraLevels].map(level=>`<div class="card table-card college-level-card ${levelTone(level)}"><h3>Classes de ${esc(level)}</h3>${rowsTable(g.classAverages.filter(r=>r.level===level))}</div>`).join('')}</div>`;
     } else {
       const byRank=state.teacherRankingMode==='rank';
-      content=`<div class="card table-card"><div class="result-tabs"><button data-teacher-ranking="time" class="${byRank?'':'active'}" aria-pressed="${!byRank}">Temps moyen</button><button data-teacher-ranking="rank" class="${byRank?'active':''}" aria-pressed="${byRank}">Rang moyen</button></div><p class="comparison-help">${byRank?'Moyenne des places des élèves dans leur classement par niveau et sexe. Le plus petit rang moyen gagne.':'Moyenne des temps des élèves arrivés. Le plus petit temps moyen gagne.'}</p><table><thead><tr><th>Rang</th><th>Professeur EPS</th><th>Classes</th><th>Classés</th><th>Temps moyen</th><th>Rang moyen</th></tr></thead><tbody>${g.teacherAverages.map(r=>`<tr><td><b>${r.rank}</b></td><td>${esc(r.teacher)}</td><td>${esc(r.classes.join(', '))}</td><td>${r.count}/${r.enrolled}</td><td>${byRank?r.average:`<b>${r.average}</b>`}</td><td>${byRank?`<b>${r.averageRank.toLocaleString('fr-FR',{maximumFractionDigits:2})}</b>`:r.averageRank.toLocaleString('fr-FR',{maximumFractionDigits:2})}</td></tr>`).join('')||'<tr><td colspan="6">Aucun résultat pour les professeurs EPS renseignés.</td></tr>'}</tbody></table></div>`;
+      content=`<div class="card table-card"><div class="result-tabs"><button data-teacher-ranking="time" class="${byRank?'':'active'}" aria-pressed="${!byRank}">Temps moyen</button><button data-teacher-ranking="rank" class="${byRank?'active':''}" aria-pressed="${byRank}">Classement moyen</button></div><p class="comparison-help">${byRank?'Moyenne des places de tous les élèves du professeur dans leur course respective (ex. : 1er + 4e + 10e = 5 de moyenne). Le plus petit rang moyen gagne.':'Moyenne des temps des élèves arrivés. Le plus petit temps moyen gagne.'}</p><table><thead><tr><th>Rang</th><th>Professeur EPS</th><th>Classes</th><th>Temps moyen</th><th>Classement moyen</th><th>Élèves pris en compte</th></tr></thead><tbody>${g.teacherAverages.map(r=>`<tr><td><b>${r.rank}</b></td><td>${esc(r.teacher)}</td><td>${esc(r.classes.join(', '))}</td><td>${byRank?r.average:`<b>${r.average}</b>`}</td><td>${byRank?`<b>${r.averageRank.toLocaleString('fr-FR',{maximumFractionDigits:2})}</b>`:r.averageRank.toLocaleString('fr-FR',{maximumFractionDigits:2})}</td><td>${r.count}</td></tr>`).join('')||'<tr><td colspan="6">Aucun résultat pour les professeurs EPS renseignés.</td></tr>'}</tbody></table></div>`;
     }
 
     return `<section class="results-page">
@@ -1008,9 +1008,9 @@
     [...classes.entries()].map(([className,a])=>({className,level:a[0]?.level||'',count:a.length,enrolled:state.students.filter(s=>s.className===className).length,averageMs:avg(a.map(s=>s.elapsedMs))})).filter(x=>x.count>0).sort((a,b)=>a.averageMs-b.averageMs).forEach((x,i)=>classOverall.push({rank:i+1,className:x.className,level:x.level,count:x.count,enrolled:x.enrolled,average:fmt(x.averageMs)}));
     const teachers=new Map(); Object.entries(state.classTeachers||{}).forEach(([className,names])=>{ (names||[]).filter(Boolean).forEach(teacher=>{ if(!teachers.has(teacher)) teachers.set(teacher,{classes:new Set(),students:[]}); const obj=teachers.get(teacher); obj.classes.add(className); obj.students.push(...finished.filter(s=>s.className===className)); }); });
     const studentRanks=new Map();
-    for(const group of indiv.values()) group.forEach((student,index)=>studentRanks.set(student.id,index+1));
+    for(const row of byRace) studentRanks.set(row.studentId,row.rank);
     [...teachers.entries()].map(([teacher,obj])=>{
-      const unique=[...new Map(obj.students.map(s=>[s.id,s])).values()];
+      const unique=[...new Map(obj.students.map(s=>[s.id,s])).values()].filter(student=>studentRanks.has(student.id));
       const enrolled=state.students.filter(s=>obj.classes.has(s.className)).length;
       return {teacher,classes:[...obj.classes].sort(),count:unique.length,enrolled,averageMs:avg(unique.map(s=>s.elapsedMs)),averageRank:avg(unique.map(s=>studentRanks.get(s.id)))};
     }).filter(x=>x.count>0).sort((a,b)=>{
@@ -1028,7 +1028,7 @@
     XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(g.byClass.map(r=>({Classe:r.className,Rang:r.rank,Dossard:r.bib,Élève:r.name,Sexe:r.sex,Temps:r.time}))),'Par classe');
     XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(g.classAverages.map(r=>({Niveau:r.level,Rang:r.rank,Classe:r.className,Classés:r.count,Inscrits:r.enrolled,'Temps moyen':r.average}))),'Classes par niveau');
     XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(g.classOverall.map(r=>({Rang:r.rank,Classe:r.className,Niveau:r.level,Classés:r.count,Inscrits:r.enrolled,'Temps moyen':r.average}))),'Classes collège');
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(g.teacherAverages.map(r=>({Rang:r.rank,Professeur:r.teacher,Classes:r.classes.join(', '),'Élèves classés':r.count,'Élèves inscrits':r.enrolled,'Temps moyen':r.average,'Rang moyen (niveau et sexe)':r.averageRank,'Critère du classement':state.teacherRankingMode==='rank'?'Rang moyen':'Temps moyen'}))),'Professeurs');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(g.teacherAverages.map(r=>({Rang:r.rank,Professeur:r.teacher,Classes:r.classes.join(', '),'Élèves classés':r.count,'Élèves inscrits':r.enrolled,'Temps moyen':r.average,'Classement moyen dans leur course':r.averageRank,'Critère du classement':state.teacherRankingMode==='rank'?'Classement moyen':'Temps moyen'}))),'Professeurs');
     XLSX.writeFile(wb,'resultats-cross.xlsx');
   }
 
@@ -1042,7 +1042,7 @@
     pdfTable(doc,'Classement par classe',['Classe','Rang','Dossard','Élève','Sexe','Temps'],g.byClass.map(r=>[r.className,r.rank,r.bib,r.name,r.sex,r.time]),false);
     pdfTable(doc,'Classement des classes par niveau',['Niveau','Rang','Classe','Classés','Inscrits','Temps moyen'],g.classAverages.map(r=>[r.level,r.rank,r.className,r.count,r.enrolled,r.average]),false);
     pdfTable(doc,'Classement des classes du collège',['Rang','Classe','Niveau','Classés','Inscrits','Temps moyen'],g.classOverall.map(r=>[r.rank,r.className,r.level,r.count,r.enrolled,r.average]),false);
-    pdfTable(doc,`Professeurs - ${state.teacherRankingMode==='rank'?'rang moyen':'temps moyen'}`,['Rang','Professeur','Classes','Classés','Inscrits','Temps moyen','Rang moyen'],g.teacherAverages.map(r=>[r.rank,r.teacher,r.classes.join(', '),r.count,r.enrolled,r.average,r.averageRank.toFixed(2)]),false);
+    pdfTable(doc,`Professeurs - ${state.teacherRankingMode==='rank'?'classement moyen par course':'temps moyen'}`,['Rang','Professeur','Classes','Classés','Inscrits','Temps moyen','Classement moyen'],g.teacherAverages.map(r=>[r.rank,r.teacher,r.classes.join(', '),r.count,r.enrolled,r.average,r.averageRank.toFixed(2)]),false);
     doc.save('resultats-cross.pdf');
   }
 
@@ -1468,13 +1468,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v37')){
-          sessionStorage.setItem('cross-browser-clean-v37','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v38')){
+          sessionStorage.setItem('cross-browser-clean-v38','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=37',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=38',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
