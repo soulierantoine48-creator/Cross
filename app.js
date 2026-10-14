@@ -467,6 +467,13 @@
     </div></div>`;
   }
 
+  function resultStudentCandidates(student) {
+    const race=raceOf(student?.raceId);
+    if(!race) return [];
+    return state.students.filter(candidate=>candidate.id===student.id || candidate.raceId===race.id || (!candidate.raceId && race.levels?.includes(candidate.level) && race.sexes?.includes(candidate.sex)))
+      .sort((a,b)=>nameOf(a).localeCompare(nameOf(b),'fr'));
+  }
+
   function resultEditModal() {
     const s=state.students.find(x=>x.id===resultEditStudentId);
     if(!s || s.elapsedMs==null) return '';
@@ -475,6 +482,10 @@
     const min=Math.floor(totalSec/60), sec=totalSec%60;
     return `<div class="modal-backdrop"><div class="modal result-edit-modal">
       <div class="modal-head"><div><span class="eyebrow">CORRIGER UN RÉSULTAT</span><h2>#${esc(s.bib)} · ${esc(nameOf(s))}</h2><p>${esc(r?.name||'')} · temps actuel ${fmt(s.elapsedMs)}</p></div><button class="close" id="close-result-edit">×</button></div>
+      <label class="result-student-label">Attribuer ce résultat à
+        <select id="result-student">${resultStudentCandidates(s).map(candidate=>`<option value="${esc(candidate.id)}" ${candidate.id===s.id?'selected':''} ${candidate.id!==s.id&&candidate.elapsedMs!=null?'disabled':''}>#${esc(candidate.bib)} · ${esc(nameOf(candidate))} · ${esc(candidate.className)}${candidate.id!==s.id&&candidate.elapsedMs!=null?' · déjà classé':''}</option>`).join('')}</select>
+      </label>
+      <p class="edit-help">Choisis un élève de cette course. Son temps sera conservé ; l’élève précédent retrouvera le statut « non arrivé ».</p>
       <div class="time-editor"><label>Minutes<input id="result-minutes" type="number" min="0" inputmode="numeric" value="${min}"></label><span>:</span><label>Secondes<input id="result-seconds" type="number" min="0" max="59" inputmode="numeric" value="${String(sec).padStart(2,'0')}"></label></div>
       <p class="edit-help">Le classement, la vitesse moyenne et les moyennes de classe/prof seront recalculés automatiquement.</p>
       <div class="modal-actions split-actions"><button class="button danger-ghost" id="delete-result">Supprimer ce résultat</button><div><button class="button" id="cancel-result-edit">Annuler</button><button class="button primary" id="save-result-edit">Enregistrer</button></div></div>
@@ -808,26 +819,40 @@
   }
 
   function saveResultEdit() {
-    const s=state.students.find(x=>x.id===resultEditStudentId);
-    const r=s ? raceOf(s.raceId) : null;
-    if(!s||!r?.startedAt) return;
+    const source=state.students.find(x=>x.id===resultEditStudentId);
+    const race=source ? raceOf(source.raceId) : null;
+    if(!source||!race?.startedAt) return;
+    const targetId=$('#result-student')?.value||source.id;
+    const target=resultStudentCandidates(source).find(s=>s.id===targetId);
+    if(!target) return notify('Choisis un élève de cette course.','error');
+    if(target.id!==source.id && target.elapsedMs!=null) return notify('Cet élève possède déjà un résultat. Choisis un élève non arrivé.','error');
     const min=Number($('#result-minutes')?.value);
     const sec=Number($('#result-seconds')?.value);
     if(!Number.isInteger(min)||min<0||!Number.isInteger(sec)||sec<0||sec>59) return notify('Temps invalide. Utilise des minutes et des secondes entre 0 et 59.','error');
-    const elapsedMs=(min*60+sec)*1000;
-    if(elapsedMs<=0) return notify('Le temps doit être supérieur à 0 seconde.','error');
-    const stamp=r.startedAt+elapsedMs;
-    s.elapsedMs=elapsedMs;
-    s.finishedAt=stamp;
-    const arrival=state.arrivals.slice().reverse().find(a=>a.studentId===s.id&&a.raceId===r.id);
+    const inputMs=(min*60+sec)*1000;
+    // Un simple changement d'élève conserve aussi les millisecondes du chronomètre.
+    const elapsedMs=inputMs===Math.floor(source.elapsedMs/1000)*1000 ? source.elapsedMs : inputMs;
+    if(elapsedMs<=0 || !Number.isFinite(elapsedMs)) return notify('Le temps doit être supérieur à 0 seconde.','error');
+    const stamp=race.startedAt+elapsedMs;
+    const arrival=state.arrivals.slice().reverse().find(a=>a.studentId===source.id&&a.raceId===race.id);
+    const reassigned=target.id!==source.id;
+    if(reassigned){
+      delete source.elapsedMs;
+      delete source.finishedAt;
+      state.arrivals=state.arrivals.filter(a=>a===arrival || !(a.studentId===source.id&&a.raceId===race.id));
+    }
+    target.raceId=race.id;
+    target.elapsedMs=elapsedMs;
+    target.finishedAt=stamp;
     if(arrival){
+      arrival.studentId=target.id;
       arrival.elapsedMs=elapsedMs;
       arrival.stamp=stamp;
       arrival.method='corrected';
     } else {
-      state.arrivals.push({id:uid(),studentId:s.id,raceId:r.id,stamp,elapsedMs,method:'corrected'});
+      state.arrivals.push({id:uid(),studentId:target.id,raceId:race.id,stamp,elapsedMs,method:'corrected'});
     }
-    state.notice=`Résultat corrigé · #${s.bib} ${nameOf(s)} · ${fmt(elapsedMs)}`;
+    state.notice=`${reassigned?'Résultat réattribué':'Résultat corrigé'} · #${target.bib} ${nameOf(target)} · ${fmt(elapsedMs)}`;
     state.noticeKind='good';
     resultEditStudentId='';
     save(); render();
@@ -1432,13 +1457,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v35')){
-          sessionStorage.setItem('cross-browser-clean-v35','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v36')){
+          sessionStorage.setItem('cross-browser-clean-v36','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=35',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=36',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
