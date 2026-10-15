@@ -399,7 +399,8 @@
       const classes=classNames();
       const selectedClass=classes.includes(state.resultClassName)?state.resultClassName:(classes[0]||'');
       const rows=g.byClass.filter(r=>r.className===selectedClass);
-      const classDetail=`<div class="results-split class-results-detail"><div class="results-list">${classes.map(cls=>`<button class="result-course ${cls===selectedClass?'selected':''}" data-view-result-class="${esc(cls)}"><strong>${esc(cls)}</strong><span>${g.byClass.filter(r=>r.className===cls).length}/${state.students.filter(s=>s.className===cls).length} classés</span></button>`).join('')||'<p class="empty">Aucune classe.</p>'}</div><div class="card table-card results-main"><div class="card-head"><div><h3>${selectedClass?`Élèves de ${esc(selectedClass)}`:'Classement par classe'}</h3><p>${rows.length} classés · filles et garçons</p></div><div class="result-actions"><button class="button" data-export-class="${esc(selectedClass)}" ${selectedClass?'':'disabled'}>PDF classe</button><button class="button" data-export-class-excel="${esc(selectedClass)}" ${rows.length?'':'disabled'}>Excel classe</button></div></div>${rows.length?`<table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Sexe</th><th>Temps</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${r.sex==='F'?'Fille':r.sex==='M'?'Garçon':'—'}</td><td><b>${r.time}</b></td><td><button class="row-edit" data-edit-result="${r.studentId}">Modifier</button></td></tr>`).join('')}</tbody></table>`:'<p class="empty">Aucun élève classé pour cette classe.</p>'}</div></div>`;
+      const missing=state.students.filter(student=>student.className===selectedClass && student.elapsedMs==null).sort((a,b)=>nameOf(a).localeCompare(nameOf(b),'fr'));
+      const classDetail=`<div class="results-split class-results-detail"><div class="results-list">${classes.map(cls=>`<button class="result-course ${cls===selectedClass?'selected':''}" data-view-result-class="${esc(cls)}"><strong>${esc(cls)}</strong><span>${g.byClass.filter(r=>r.className===cls).length}/${state.students.filter(s=>s.className===cls).length} classés</span></button>`).join('')||'<p class="empty">Aucune classe.</p>'}</div><div class="card table-card results-main"><div class="card-head"><div><h3>${selectedClass?`Élèves de ${esc(selectedClass)}`:'Classement par classe'}</h3><p>${rows.length} classés · ${missing.length} absents / non classés</p></div><div class="result-actions"><button class="button" data-export-class="${esc(selectedClass)}" ${selectedClass?'':'disabled'}>PDF classe</button><button class="button" data-export-class-excel="${esc(selectedClass)}" ${rows.length?'':'disabled'}>Excel classe</button></div></div><p class="comparison-help">La place est celle de l’élève dans sa course. Les élèves sans temps figurent en fin de liste.</p>${rows.length||missing.length?`<table class="class-pupil-results"><thead><tr><th>Dossard</th><th>Élève</th><th>Sexe</th><th>Temps</th><th>Vitesse moyenne</th><th>Course</th><th>Place course</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr><td>#${row.bib}</td><td>${esc(row.name)}</td><td>${row.sex==='F'?'Fille':row.sex==='M'?'Garçon':'—'}</td><td><b>${row.time}</b></td><td>${row.speed}</td><td>${esc(row.raceName)}</td><td><b>${row.raceRank}</b></td><td><button class="row-edit" data-edit-result="${row.studentId}">Modifier</button></td></tr>`).join('')}${missing.map(student=>`<tr class="absent-result-row"><td>#${esc(student.bib||'—')}</td><td>${esc(nameOf(student))}</td><td>${student.sex==='F'?'Fille':student.sex==='M'?'Garçon':'—'}</td><td><span class="absent-result-label">Absent / non classé</span></td><td>—</td><td>${esc(raceOf(student.raceId)?.name||'—')}</td><td>—</td><td></td></tr>`).join('')}</tbody></table>`:'<p class="empty">Aucun élève dans cette classe.</p>'}</div></div>`;
       content=classDetail;
     } else if(mode==='college'){
       const rowsTable=(rows,overall=false)=>`<table><thead><tr><th>Rang</th><th>Classe</th>${overall?'<th>Niveau</th>':''}<th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${r.rank}</b></td><td>${esc(r.className)}</td>${overall?`<td>${esc(r.level)}</td>`:''}<td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')||`<tr><td colspan="${overall?5:4}">Aucune classe avec un résultat.</td></tr>`}</tbody></table>`;
@@ -1526,13 +1527,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v42')){
-          sessionStorage.setItem('cross-browser-clean-v42','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v43')){
+          sessionStorage.setItem('cross-browser-clean-v43','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=42',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=43',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
