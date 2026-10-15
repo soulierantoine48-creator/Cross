@@ -30,6 +30,7 @@
   let studentEditorId = null;
   let studentSearch = '';
   let bibClassPickerOpen = false;
+  let resultsPdfPickerOpen = false;
   let syncStatus = navigator.onLine ? 'pending' : 'offline';
   let syncPending = true;
   let syncTimer = null;
@@ -241,6 +242,7 @@
       ${resultEditStudentId ? resultEditModal() : ''}
       ${deleteFinishedRaceId ? deleteFinishedRaceModal() : ''}
       ${bibClassPickerOpen ? bibClassPickerModal() : ''}
+      ${resultsPdfPickerOpen ? resultsPdfPickerModal() : ''}
     </div>`;
     bind();
     updateSyncBadge();
@@ -410,10 +412,14 @@
     }
 
     return `<section class="results-page">
-      <div class="hero-card results-hero"><div><span class="eyebrow">RÉSULTATS</span><h2>${done} élèves classés</h2><p>${ended.length} course${ended.length>1?'s':''} terminée${ended.length>1?'s':''}</p></div><div class="actions"><button class="button" id="export-excel" ${done?'':'disabled'}>Excel</button><button class="button primary" id="export-all-results" ${done?'':'disabled'}>PDF complet</button></div></div>
+      <div class="hero-card results-hero"><div><span class="eyebrow">RÉSULTATS</span><h2>${done} élèves classés</h2><p>${ended.length} course${ended.length>1?'s':''} terminée${ended.length>1?'s':''}</p></div><div class="actions"><button class="button" id="export-excel" ${done?'':'disabled'}>Excel</button><button class="button primary" id="export-all-results" ${done?'':'disabled'}>Exporter PDF</button></div></div>
       <div class="result-tabs"><button data-result-mode="courses" class="${mode==='courses'?'active':''}">Courses</button><button data-result-mode="individual" class="${mode==='individual'?'active':''}">Individuels</button><button data-result-mode="classes" class="${mode==='classes'?'active':''}">Classes</button><button data-result-mode="college" class="${mode==='college'?'active':''}">Collège</button><button data-result-mode="teachers" class="${mode==='teachers'?'active':''}">Professeurs</button></div>
       ${content}
     </section>`;
+  }
+
+  function resultsPdfPickerModal() {
+    return `<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">EXPORT DES RÉSULTATS</span><h2>Choisir le PDF</h2></div><button class="close" id="close-results-pdf">×</button></div><div class="pdf-export-choices"><button class="button" data-results-pdf="courses"><strong>Classement par course</strong><span>Un tableau par course : place, élève, classe, temps et vitesse moyenne.</span></button><button class="button" data-results-pdf="classes"><strong>Classement par classe</strong><span>Un tableau par classe : élève, temps, vitesse moyenne et place dans sa course.</span></button></div></div></div>`;
   }
 
   function classModal() {
@@ -616,7 +622,9 @@
 
     document.querySelectorAll('[data-result-mode]').forEach(b=>b.onclick=()=>{state.resultMode=b.dataset.resultMode;save();render();});
     document.querySelectorAll('[data-teacher-ranking]').forEach(b=>b.onclick=()=>{state.teacherRankingMode=b.dataset.teacherRanking;save();render();});
-    $('#export-all-results')?.addEventListener('click',exportResultsPdf);
+    $('#export-all-results')?.addEventListener('click',()=>{resultsPdfPickerOpen=true;render();});
+    $('#close-results-pdf')?.addEventListener('click',()=>{resultsPdfPickerOpen=false;render();});
+    document.querySelectorAll('[data-results-pdf]').forEach(b=>b.onclick=()=>{const mode=b.dataset.resultsPdf;resultsPdfPickerOpen=false;render();exportResultsPdf(mode);});
     $('#export-excel')?.addEventListener('click',exportExcel);
     document.querySelectorAll('[data-view-result-class]').forEach(b=>b.onclick=()=>{state.resultClassName=b.dataset.viewResultClass;save();render();});
     document.querySelectorAll('[data-export-class]').forEach(b=>b.onclick=()=>exportClassPdf(b.dataset.exportClass));
@@ -1027,8 +1035,9 @@
     const indiv=new Map(); finished.forEach(s=>{const k=`${s.level}|${s.sex}`; if(!indiv.has(k)) indiv.set(k,[]); indiv.get(k).push(s);});
     [...indiv.entries()].sort().forEach(([k,a])=>{const[level,sex]=k.split('|');a.sort((x,y)=>x.elapsedMs-y.elapsedMs);a.forEach((s,i)=>individual.push({level,sex,rank:i+1,bib:s.bib,name:nameOf(s),className:s.className,time:fmt(s.elapsedMs)}));});
     state.races.forEach(r=>{ const a=finished.filter(s=>s.raceId===r.id).sort((x,y)=>x.elapsedMs-y.elapsedMs); a.forEach((s,i)=>byRace.push({raceId:r.id,raceName:r.name,studentId:s.id,rank:i+1,bib:s.bib,name:nameOf(s),className:s.className,time:fmt(s.elapsedMs),speed:fmtSpeed(s)})); });
+    const courseResults=new Map(byRace.map(row=>[row.studentId,row]));
     const classes=new Map(); finished.forEach(s=>{if(!classes.has(s.className)) classes.set(s.className,[]); classes.get(s.className).push(s);});
-    [...classes.entries()].sort().forEach(([className,a])=>{a.sort((x,y)=>x.elapsedMs-y.elapsedMs);a.forEach((s,i)=>byClass.push({className,studentId:s.id,rank:i+1,bib:s.bib,name:nameOf(s),sex:s.sex,time:fmt(s.elapsedMs)}));});
+    [...classes.entries()].sort().forEach(([className,a])=>{a.sort((x,y)=>x.elapsedMs-y.elapsedMs);a.forEach((s,i)=>byClass.push({className,studentId:s.id,rank:i+1,bib:s.bib,name:nameOf(s),sex:s.sex,time:fmt(s.elapsedMs),speed:fmtSpeed(s),raceName:courseResults.get(s.id)?.raceName||'—',raceRank:courseResults.get(s.id)?.rank??'—'}));});
     const lc=new Map(); finished.forEach(s=>{const k=`${s.level}|${s.className}`; if(!lc.has(k)) lc.set(k,[]); lc.get(k).push(s);});
     const levels=new Map(); [...lc.entries()].forEach(([k,a])=>{const[level,className]=k.split('|'); if(!levels.has(level)) levels.set(level,[]); const enrolled=state.students.filter(s=>s.level===level&&s.className===className).length; levels.get(level).push({className,count:a.length,enrolled,averageMs:avg(a.map(s=>s.elapsedMs))});});
     [...levels.entries()].sort().forEach(([level,a])=>{a.sort((x,y)=>x.averageMs-y.averageMs);a.forEach((x,i)=>classAverages.push({level,rank:i+1,className:x.className,count:x.count,enrolled:x.enrolled,average:fmt(x.averageMs)}));});
@@ -1060,17 +1069,21 @@
   }
 
   function pdfTable(doc,title,head,body,first){ if(!first) doc.addPage(); doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.text(title,14,18); doc.autoTable({head:[head],body,startY:24,styles:{fontSize:8},headStyles:{fillColor:[15,23,42]}}); }
-  function exportResultsPdf() {
-    const g=rankings(); if(!window.jspdf?.jsPDF) return notify('Module PDF indisponible');
-    const {jsPDF}=window.jspdf, doc=new jsPDF({unit:'mm',format:'a4'});
+  function exportResultsPdf(mode) {
+    if(!['courses','classes'].includes(mode)) return;
+    const g=rankings();
+    const rows=mode==='courses'?g.byRace:g.byClass;
+    if(!rows.length) return notify('Aucun résultat à exporter.','warning');
+    if(!window.jspdf?.jsPDF) return notify('Module PDF indisponible');
+    const doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
     if(typeof doc.autoTable !== 'function') return notify('Module tableau PDF indisponible');
-    pdfTable(doc,'Classement par niveau et sexe',['Niveau','Sexe','Rang','Dossard','Élève','Classe','Temps'],g.individual.map(r=>[r.level,r.sex,r.rank,r.bib,r.name,r.className,r.time]),true);
-    pdfTable(doc,'Classement par course',['Course','Rang','Dossard','Élève','Classe','Temps','Vitesse'],g.byRace.map(r=>[r.raceName,r.rank,r.bib,r.name,r.className,r.time,r.speed]),false);
-    pdfTable(doc,'Classement par classe',['Classe','Rang','Dossard','Élève','Sexe','Temps'],g.byClass.map(r=>[r.className,r.rank,r.bib,r.name,r.sex,r.time]),false);
-    pdfTable(doc,'Classement des classes par niveau',['Niveau','Rang','Classe','Classés','Inscrits','Temps moyen'],g.classAverages.map(r=>[r.level,r.rank,r.className,r.count,r.enrolled,r.average]),false);
-    pdfTable(doc,'Classement des classes du collège',['Rang','Classe','Niveau','Classés','Inscrits','Temps moyen'],g.classOverall.map(r=>[r.rank,r.className,r.level,r.count,r.enrolled,r.average]),false);
-    pdfTable(doc,`Professeurs - ${state.teacherRankingMode==='rank'?'classement moyen par course':'temps moyen'}`,['Rang','Professeur','Classes','Classés','Inscrits','Temps moyen','Classement moyen'],g.teacherAverages.map(r=>[r.rank,r.teacher,r.classes.join(', '),r.count,r.enrolled,r.average,r.averageRank.toFixed(2)]),false);
-    doc.save('resultats-cross.pdf');
+    if(mode==='courses'){
+      const races=state.races.filter(race=>g.byRace.some(row=>row.raceId===race.id));
+      races.forEach((race,index)=>pdfTable(doc,race.name,['Place','Dossard','Élève','Classe','Temps','Vitesse moy.'],g.byRace.filter(row=>row.raceId===race.id).map(row=>[row.rank,row.bib,row.name,row.className,row.time,row.speed]),index===0));
+    } else {
+      [...new Set(g.byClass.map(row=>row.className))].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true})).forEach((className,index)=>pdfTable(doc,`Classe ${className}`,['Dossard','Élève','Temps','Vitesse moy.','Course','Place course'],g.byClass.filter(row=>row.className===className).map(row=>[row.bib,row.name,row.time,row.speed,row.raceName,row.raceRank]),index===0));
+    }
+    doc.save(mode==='courses'?'resultats-par-course-cross.pdf':'resultats-par-classe-cross.pdf');
   }
 
   function exportRacePdf(raceId) {
@@ -1095,7 +1108,7 @@
     if(typeof doc.autoTable!=='function') return notify('Module tableau PDF indisponible');
     doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.text(`Classe ${className}`,14,18);
     doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.text(`Cross 2026 · ${rows.length} élèves classés`,14,25);
-    doc.autoTable({head:[['Rang','Dossard','Élève','Sexe','Temps']],body:rows.map(r=>[r.rank,r.bib,r.name,r.sex==='F'?'Fille':r.sex==='M'?'Garçon':'—',r.time]),startY:30,styles:{fontSize:9},headStyles:{fillColor:[15,23,42]}});
+    doc.autoTable({head:[['Dossard','Élève','Temps','Vitesse moy.','Course','Place course']],body:rows.map(r=>[r.bib,r.name,r.time,r.speed,r.raceName,r.raceRank]),startY:30,styles:{fontSize:9},headStyles:{fillColor:[15,23,42]}});
     doc.save(`resultats-classe-${resultFileName(className)}.pdf`);
   }
 
@@ -1495,13 +1508,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v39')){
-          sessionStorage.setItem('cross-browser-clean-v39','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v40')){
+          sessionStorage.setItem('cross-browser-clean-v40','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=39',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=40',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
