@@ -419,7 +419,7 @@
   }
 
   function resultsPdfPickerModal() {
-    return `<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">EXPORT DES RÉSULTATS</span><h2>Choisir le PDF</h2></div><button class="close" id="close-results-pdf">×</button></div><div class="pdf-export-choices"><button class="button" data-results-pdf="courses"><strong>Classement par course</strong><span>Un tableau par course : place, élève, classe, temps et vitesse moyenne.</span></button><button class="button" data-results-pdf="classes"><strong>Classement par classe</strong><span>Un tableau par classe : élève, temps, vitesse moyenne et place dans sa course.</span></button></div></div></div>`;
+    return `<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">EXPORT DES RÉSULTATS</span><h2>Choisir le PDF</h2></div><button class="close" id="close-results-pdf">×</button></div><div class="pdf-export-choices"><button class="button" data-results-pdf="courses"><strong>Classement par course</strong><span>Un tableau par course : place, élève, classe, temps et vitesse moyenne.</span></button><button class="button" data-results-pdf="classes"><strong>Toutes les classes · 1 classe par page</strong><span>Un seul PDF complet : élève, temps, vitesse moyenne et place dans sa course.</span></button></div></div></div>`;
   }
 
   function classModal() {
@@ -1081,9 +1081,9 @@
       const races=state.races.filter(race=>g.byRace.some(row=>row.raceId===race.id));
       races.forEach((race,index)=>pdfTable(doc,race.name,['Place','Dossard','Élève','Classe','Temps','Vitesse moy.'],g.byRace.filter(row=>row.raceId===race.id).map(row=>[row.rank,row.bib,row.name,row.className,row.time,row.speed]),index===0));
     } else {
-      [...new Set(g.byClass.map(row=>row.className))].sort((a,b)=>a.localeCompare(b,'fr',{numeric:true})).forEach((className,index)=>pdfTable(doc,`Classe ${className}`,['Dossard','Élève','Temps','Vitesse moy.','Course','Place course'],g.byClass.filter(row=>row.className===className).map(row=>[row.bib,row.name,row.time,row.speed,row.raceName,row.raceRank]),index===0));
+      classNames().forEach((className,index)=>drawClassResultsPage(doc,className,g.byClass.filter(row=>row.className===className),index===0));
     }
-    doc.save(mode==='courses'?'resultats-par-course-cross.pdf':'resultats-par-classe-cross.pdf');
+    doc.save(mode==='courses'?'resultats-par-course-cross.pdf':'resultats-toutes-classes-une-classe-par-page.pdf');
   }
 
   function exportRacePdf(raceId) {
@@ -1100,15 +1100,31 @@
 
   const resultFileName = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-|-$/g,'').toLowerCase() || 'classement';
 
+  function drawClassResultsPage(doc,className,rows,first=true) {
+    if(!first) doc.addPage('a4','portrait');
+    doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text(`Classe ${className}`,14,18);
+    doc.setFont('helvetica','normal');doc.setFontSize(10);
+    doc.text(`Cross 2026 - ${rows.length} élèves classés${state.crossDistanceM?' - '+state.crossDistanceM+' m':''}`,14,25);
+    doc.setFontSize(9);doc.text('La place indiquée est celle de l’élève dans sa course.',14,32);
+    doc.autoTable({
+      head:[['Dossard','Élève','Temps','Vitesse moyenne','Course','Place dans la course']],
+      body:rows.map(row=>[row.bib,row.name,row.time,row.speed,row.raceName,row.raceRank]),
+      startY:38,margin:{top:38,bottom:14,left:14,right:14},
+      styles:{fontSize:9,cellPadding:2,overflow:'linebreak'},
+      headStyles:{fillColor:[15,23,42]},
+      columnStyles:{0:{cellWidth:17},1:{cellWidth:62},2:{cellWidth:18},3:{cellWidth:26},4:{cellWidth:34},5:{cellWidth:25}},
+      rowPageBreak:'avoid'
+    });
+    if(!rows.length){doc.setFontSize(11);doc.text('Aucun élève classé pour cette classe.',14,62);}
+  }
+
   function exportClassPdf(className) {
     const rows=rankings().byClass.filter(r=>r.className===className);
     if(!rows.length) return notify('Aucun résultat dans cette classe.','warning');
     if(!window.jspdf?.jsPDF) return notify('Module PDF indisponible');
     const doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
     if(typeof doc.autoTable!=='function') return notify('Module tableau PDF indisponible');
-    doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.text(`Classe ${className}`,14,18);
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.text(`Cross 2026 · ${rows.length} élèves classés`,14,25);
-    doc.autoTable({head:[['Dossard','Élève','Temps','Vitesse moy.','Course','Place course']],body:rows.map(r=>[r.bib,r.name,r.time,r.speed,r.raceName,r.raceRank]),startY:30,styles:{fontSize:9},headStyles:{fillColor:[15,23,42]}});
+    drawClassResultsPage(doc,className,rows);
     doc.save(`resultats-classe-${resultFileName(className)}.pdf`);
   }
 
@@ -1508,13 +1524,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v40')){
-          sessionStorage.setItem('cross-browser-clean-v40','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v41')){
+          sessionStorage.setItem('cross-browser-clean-v41','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=40',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=41',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });

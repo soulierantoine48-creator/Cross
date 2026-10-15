@@ -1,4 +1,4 @@
-const CACHE='cross-college-v40';
+const CACHE='cross-college-v41';
 const LOCAL=['/icon-180.png','/index.html','/styles.css','/app.js','/manifest.webmanifest','/apple-touch-icon.png','/favicon.png','/bib-v0.js','/bib-v1.js','/bib-v2.js','/bib-v3.js','/bib-v4.js','/bib-v5.js'];
 const EXTERNAL=[
   'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js',
@@ -38,6 +38,19 @@ self.addEventListener('fetch',event=>{
       }catch(_){
         return (await cache.match('/index.html')) || new Response('Hors connexion',{status:503});
       }
+    })());
+    return;
+  }
+
+  // Le code et le style suivent immédiatement le déploiement, y compris en PWA.
+  if(url.origin===self.location.origin && ['/app.js','/styles.css'].includes(url.pathname)){
+    event.respondWith((async()=>{
+      const cache=await caches.open(CACHE);
+      try{
+        const response=await fetch(event.request,{cache:'no-store'});
+        if(response.ok) await cache.put(event.request,response.clone());
+        return response;
+      }catch(_){return (await cache.match(event.request,{ignoreSearch:true})) || new Response('Hors connexion',{status:503});}
     })());
     return;
   }
