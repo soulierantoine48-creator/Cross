@@ -399,7 +399,7 @@
       const classes=classNames();
       const selectedClass=classes.includes(state.resultClassName)?state.resultClassName:(classes[0]||'');
       const rows=g.byClass.filter(r=>r.className===selectedClass);
-      const classDetail=`<div class="results-split class-results-detail"><div class="results-list">${classes.map(cls=>`<button class="result-course ${cls===selectedClass?'selected':''}" data-view-result-class="${esc(cls)}"><strong>${esc(cls)}</strong><span>${g.byClass.filter(r=>r.className===cls).length}/${state.students.filter(s=>s.className===cls).length} classés</span></button>`).join('')||'<p class="empty">Aucune classe.</p>'}</div><div class="card table-card results-main"><div class="card-head"><div><h3>${selectedClass?`Élèves de ${esc(selectedClass)}`:'Classement par classe'}</h3><p>${rows.length} classés · filles et garçons</p></div><div class="result-actions"><button class="button" data-export-class="${esc(selectedClass)}" ${rows.length?'':'disabled'}>PDF classe</button><button class="button" data-export-class-excel="${esc(selectedClass)}" ${rows.length?'':'disabled'}>Excel classe</button></div></div>${rows.length?`<table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Sexe</th><th>Temps</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${r.sex==='F'?'Fille':r.sex==='M'?'Garçon':'—'}</td><td><b>${r.time}</b></td><td><button class="row-edit" data-edit-result="${r.studentId}">Modifier</button></td></tr>`).join('')}</tbody></table>`:'<p class="empty">Aucun élève classé pour cette classe.</p>'}</div></div>`;
+      const classDetail=`<div class="results-split class-results-detail"><div class="results-list">${classes.map(cls=>`<button class="result-course ${cls===selectedClass?'selected':''}" data-view-result-class="${esc(cls)}"><strong>${esc(cls)}</strong><span>${g.byClass.filter(r=>r.className===cls).length}/${state.students.filter(s=>s.className===cls).length} classés</span></button>`).join('')||'<p class="empty">Aucune classe.</p>'}</div><div class="card table-card results-main"><div class="card-head"><div><h3>${selectedClass?`Élèves de ${esc(selectedClass)}`:'Classement par classe'}</h3><p>${rows.length} classés · filles et garçons</p></div><div class="result-actions"><button class="button" data-export-class="${esc(selectedClass)}" ${selectedClass?'':'disabled'}>PDF classe</button><button class="button" data-export-class-excel="${esc(selectedClass)}" ${rows.length?'':'disabled'}>Excel classe</button></div></div>${rows.length?`<table><thead><tr><th>Rang</th><th>Dossard</th><th>Élève</th><th>Sexe</th><th>Temps</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${r.rank}</b></td><td>#${r.bib}</td><td>${esc(r.name)}</td><td>${r.sex==='F'?'Fille':r.sex==='M'?'Garçon':'—'}</td><td><b>${r.time}</b></td><td><button class="row-edit" data-edit-result="${r.studentId}">Modifier</button></td></tr>`).join('')}</tbody></table>`:'<p class="empty">Aucun élève classé pour cette classe.</p>'}</div></div>`;
       content=classDetail;
     } else if(mode==='college'){
       const rowsTable=(rows,overall=false)=>`<table><thead><tr><th>Rang</th><th>Classe</th>${overall?'<th>Niveau</th>':''}<th>Classés</th><th>Temps moyen</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${r.rank}</b></td><td>${esc(r.className)}</td>${overall?`<td>${esc(r.level)}</td>`:''}<td>${r.count}/${r.enrolled}</td><td><b>${r.average}</b></td></tr>`).join('')||`<tr><td colspan="${overall?5:4}">Aucune classe avec un résultat.</td></tr>`}</tbody></table>`;
@@ -1101,26 +1101,28 @@
   const resultFileName = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-|-$/g,'').toLowerCase() || 'classement';
 
   function drawClassResultsPage(doc,className,rows,first=true) {
+    const missing=state.students.filter(student=>student.className===className && student.elapsedMs==null).sort((a,b)=>nameOf(a).localeCompare(nameOf(b),'fr'));
+    const body=[...rows.map(row=>[row.bib,row.name,row.time,row.speed,row.raceName,row.raceRank]),...missing.map(student=>[student.bib||'—',nameOf(student),'Absent','—',raceOf(student.raceId)?.name||'—','—'])];
     if(!first) doc.addPage('a4','portrait');
     doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text(`Classe ${className}`,14,18);
     doc.setFont('helvetica','normal');doc.setFontSize(10);
-    doc.text(`Cross 2026 - ${rows.length} élèves classés${state.crossDistanceM?' - '+state.crossDistanceM+' m':''}`,14,25);
-    doc.setFontSize(9);doc.text('La place indiquée est celle de l’élève dans sa course.',14,32);
+    doc.text(`Cross 2026 - ${rows.length} classés - ${missing.length} absents / non classés${state.crossDistanceM?' - '+state.crossDistanceM+' m':''}`,14,25);
+    doc.setFontSize(9);doc.text('Place = classement dans sa course ; « Absent » = élève sans temps enregistré.',14,32);
     doc.autoTable({
       head:[['Dossard','Élève','Temps','Vitesse moyenne','Course','Place dans la course']],
-      body:rows.map(row=>[row.bib,row.name,row.time,row.speed,row.raceName,row.raceRank]),
+      body,
       startY:38,margin:{top:38,bottom:14,left:14,right:14},
       styles:{fontSize:9,cellPadding:2,overflow:'linebreak'},
       headStyles:{fillColor:[15,23,42]},
       columnStyles:{0:{cellWidth:17},1:{cellWidth:62},2:{cellWidth:18},3:{cellWidth:26},4:{cellWidth:34},5:{cellWidth:25}},
       rowPageBreak:'avoid'
     });
-    if(!rows.length){doc.setFontSize(11);doc.text('Aucun élève classé pour cette classe.',14,62);}
+    if(!body.length){doc.setFontSize(11);doc.text('Aucun élève dans cette classe.',14,62);}
   }
 
   function exportClassPdf(className) {
     const rows=rankings().byClass.filter(r=>r.className===className);
-    if(!rows.length) return notify('Aucun résultat dans cette classe.','warning');
+    if(!state.students.some(student=>student.className===className)) return notify('Aucun élève dans cette classe.','warning');
     if(!window.jspdf?.jsPDF) return notify('Module PDF indisponible');
     const doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
     if(typeof doc.autoTable!=='function') return notify('Module tableau PDF indisponible');
@@ -1524,13 +1526,13 @@
           const keys=await caches.keys();
           await Promise.all(keys.filter(k=>k.startsWith('cross-college-')).map(k=>caches.delete(k)));
         }
-        if(hadController && !sessionStorage.getItem('cross-browser-clean-v41')){
-          sessionStorage.setItem('cross-browser-clean-v41','1');
+        if(hadController && !sessionStorage.getItem('cross-browser-clean-v42')){
+          sessionStorage.setItem('cross-browser-clean-v42','1');
           location.reload();
         }
         return;
       }
-      const reg=await navigator.serviceWorker.register('/sw.js?v=41',{updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('/sw.js?v=42',{updateViaCache:'none'});
       await reg.update();
     }catch(_){}
   });
